@@ -1,0 +1,36 @@
+# ── Dependências ──────────────────────────────────
+node_modules/
+
+# ── Build ─────────────────────────────────────────
+dist/
+
+# ── Ambiente — NUNCA commitar valores reais ───────
+.env
+.env.local
+.env.*.local
+
+# ── Banco de Dados local ──────────────────────────
+*.db
+*.db-shm
+*.db-wal
+
+# ── Sessões WhatsApp (credenciais locais) ─────────
+auth_info/
+sessions/
+
+# ── Logs ──────────────────────────────────────────
+*.log
+logs/
+
+# ── Prisma ────────────────────────────────────────
+prisma/migrations/
+
+# ── Sistema Operacional ───────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs ──────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
