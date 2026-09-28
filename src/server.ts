@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { SessionManager } from './core/session-manager';
 import { authMiddleware } from './middleware/auth';
+import { startQueue, stopQueue } from './queue';
 import { instancesRouter } from './routes/instances';
 
 /**
@@ -97,6 +98,9 @@ async function bootstrap(): Promise<void> {
     });
   }
 
+  // ── Inicia Sistema de Filas ────────────────────────────────────────────────
+  await startQueue();
+
   // ── Restaura Sessões Salvas no Boot ────────────────────────────────────────
   const manager = SessionManager.getInstance();
   await manager.restoreAllSessions();
@@ -119,6 +123,7 @@ async function bootstrap(): Promise<void> {
     await Promise.allSettled(
       sessions.map((s) => SessionManager.getInstance().get(s.name)?.disconnect(false)),
     );
+    await stopQueue();
     logger.info('All sessions disconnected. Goodbye! 👋');
     process.exit(0);
   };

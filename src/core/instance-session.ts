@@ -19,6 +19,8 @@ import type {
   StoredMessage,
   WebhookConfig,
 } from '../types';
+import { getQueue } from '../queue';
+import { RateLimiter } from '../queue/rate-limiter';
 
 const RECONNECT_DELAYS_MS = [1_000, 5_000, 30_000, 300_000]; // 1s, 5s, 30s, 5min
 
@@ -43,6 +45,9 @@ export class InstanceSession {
   private _isDisconnecting = false;
   private _reconnectAttempt = 0;
 
+  /** Rate limiter anti-ban — 1 por instância para isolamento */
+  private readonly rateLimiter: RateLimiter;
+
   /** Store em memória para lookup de mensagens (necessário para reações e replies) */
   private messageStore = new Map<string, StoredMessage>();
 
@@ -52,6 +57,7 @@ export class InstanceSession {
   constructor(name: string) {
     this.name = name;
     this.createdAt = new Date();
+    this.rateLimiter = new RateLimiter(name);
   }
 
   // ── Getters públicos ────────────────────────────────────────────────────────
@@ -62,6 +68,7 @@ export class InstanceSession {
   get qrRaw(): string | null { return this._qrRaw; }
   get webhook(): WebhookConfig | null { return this._webhook; }
   get isConnected(): boolean { return this._status === 'open' && this.socket !== null; }
+  get rateLimiterMetrics() { return this.rateLimiter.getMetrics(); }
 
   /** Retorna o estado completo da instância para a API REST */
   toState(): InstanceState {
@@ -157,6 +164,7 @@ export class InstanceSession {
   /** Envia uma mensagem de texto simples. */
   async sendText(jid: string, text: string): Promise<WAMessage | undefined> {
     this.assertConnected();
+    await this.rateLimiter.waitForSlot();
     const result = await this.socket!.sendMessage(jid, { text });
     if (result?.key.id) this.storeMessage(result);
     return result;
@@ -200,6 +208,7 @@ export class InstanceSession {
         break;
     }
 
+    await this.rateLimiter.waitForSlot();
     const result = await this.socket!.sendMessage(jid, content);
     if (result?.key.id) this.storeMessage(result);
     return result;
@@ -210,6 +219,7 @@ export class InstanceSession {
    */
   async sendAudio(jid: string, url: string, ptt = true): Promise<WAMessage | undefined> {
     this.assertConnected();
+    await this.rateLimiter.waitForSlot();
     const result = await this.socket!.sendMessage(jid, {
       audio: { url },
       mimetype: 'audio/mp4',
@@ -227,6 +237,7 @@ export class InstanceSession {
     name?: string,
   ): Promise<WAMessage | undefined> {
     this.assertConnected();
+    await this.rateLimiter.waitForSlot();
     const result = await this.socket!.sendMessage(jid, {
       location: { degreesLatitude: latitude, degreesLongitude: longitude, name: name ?? '' },
     });
@@ -423,7 +434,10 @@ export class InstanceSession {
     });
   }
 
-  /** Despacha um evento de webhook para o sistema do cliente. */
+  /**
+   * Enfileira um evento de webhook para despacho com retentativas automáticas.
+   * O queue driver (memory/redis) garante entrega confiável ao sistema do cliente.
+   */
   private async dispatchWebhook(event: string, data: unknown): Promise<void> {
     if (!this._webhook?.enabled || !this._webhook.url) return;
 
@@ -436,23 +450,25 @@ export class InstanceSession {
     };
 
     try {
-      const res = await fetch(this._webhook.url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'ECO-Gateway/0.1.0',
-          'x-eco-instance': this.name,
-          'x-eco-event': event,
-        },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10_000),
+      await getQueue().enqueueWebhook({
+        instance: this.name,
+        event,
+        url: this._webhook.url,
+        payload,
       });
-      logger.debug({ instance: this.name, event, status: res.status }, 'Webhook dispatched');
+      logger.debug({ instance: this.name, event }, 'Webhook enqueued');
     } catch (err) {
+      // Fallback direto se a fila falhar (ex: Redis indisponível)
       logger.warn(
         { instance: this.name, event, error: (err as Error).message },
-        'Webhook dispatch failed',
+        'Queue unavailable — dispatching webhook directly',
       );
+      void fetch(this._webhook.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'ECO-Gateway/0.1.0' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => undefined);
     }
   }
 }
