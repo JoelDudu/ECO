@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type { AuthenticationState, SignalDataTypeMap } from '@whiskeysockets/baileys';
-import { initAuthCreds, proto } from '@whiskeysockets/baileys';
+import { BufferJSON, initAuthCreds } from '@whiskeysockets/baileys';
 import Database from 'better-sqlite3';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
@@ -128,7 +128,7 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
   // Carrega as credenciais salvas ou cria novas
   const rawCreds = (getCreds.get as (id: string) => { value: string } | undefined)('default');
   const creds: AuthenticationState['creds'] = rawCreds
-    ? (JSON.parse(decrypt(rawCreds.value)) as AuthenticationState['creds'])
+    ? (JSON.parse(decrypt(rawCreds.value), BufferJSON.reviver) as AuthenticationState['creds'])
     : initAuthCreds();
 
   /**
@@ -148,15 +148,10 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
           id,
         );
         if (row) {
-          let value = JSON.parse(decrypt(row.value)) as unknown as SignalDataTypeMap[T];
-
-          // O Baileys exige que pre-keys sejam objetos proto.Message
-          if (type === 'pre-key') {
-            value = proto.Message.decode(
-              Buffer.from(value as unknown as string, 'base64'),
-            ) as unknown as SignalDataTypeMap[T];
-          }
-
+          const value = JSON.parse(
+            decrypt(row.value),
+            BufferJSON.reviver,
+          ) as unknown as SignalDataTypeMap[T];
           result[id] = value;
         }
       }
@@ -174,16 +169,7 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
             if (value === null || value === undefined) {
               (deleteKeys.run as (type: string, id: string) => void)(type, id);
             } else {
-              let serialized: string;
-
-              if (type === 'pre-key') {
-                serialized = Buffer.from(
-                  proto.Message.encode(value as proto.IMessage).finish(),
-                ).toString('base64');
-              } else {
-                serialized = JSON.stringify(value);
-              }
-
+              const serialized = JSON.stringify(value, BufferJSON.replacer);
               (upsertKey.run as (type: string, id: string, value: string) => void)(
                 type,
                 id,
@@ -204,7 +190,7 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
    * Chamado automaticamente pelo Baileys via `sock.ev.on('creds.update', saveCreds)`.
    */
   async function saveCreds(): Promise<void> {
-    const serialized = encrypt(JSON.stringify(creds));
+    const serialized = encrypt(JSON.stringify(creds, BufferJSON.replacer));
     (upsertCreds.run as (id: string, value: string) => void)('default', serialized);
     logger.debug({ instanceName }, 'Credentials saved to SQLite');
   }

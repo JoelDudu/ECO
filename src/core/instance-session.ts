@@ -1,5 +1,6 @@
 import type { AnyMessageContent, WAMessage, WAMessageKey } from '@whiskeysockets/baileys';
 import {
+  Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   isJidBroadcast,
@@ -158,7 +159,7 @@ export class InstanceSession {
         const stored = this.messageStore.get(key.id ?? '');
         return stored?.message ?? undefined;
       },
-      browser: ['ECO Gateway', 'Chrome', '120.0.0'],
+      browser: Browsers.ubuntu('Chrome'),
     });
 
     this.bindEvents();
