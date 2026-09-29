@@ -11,11 +11,15 @@
         "noUnusedVariables": "warn",
         "noUnusedImports": "warn"
       },
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
       "suspicious": {
         "noExplicitAny": "warn"
       },
       "style": {
         "noNonNullAssertion": "warn",
+        "useNodejsImportProtocol": "off",
         "useConst": "error"
       }
     }

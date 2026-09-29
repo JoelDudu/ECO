@@ -9,9 +9,10 @@ import {
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
-import { env } from '../config/env';
 import { logger } from '../config/logger';
 import { useSQLiteAuthState } from '../database/sqlite-auth-state';
+import { getQueue } from '../queue';
+import { RateLimiter } from '../queue/rate-limiter';
 import type {
   BaileysSocket,
   ConnectionStatus,
@@ -19,8 +20,6 @@ import type {
   StoredMessage,
   WebhookConfig,
 } from '../types';
-import { getQueue } from '../queue';
-import { RateLimiter } from '../queue/rate-limiter';
 
 const RECONNECT_DELAYS_MS = [1_000, 5_000, 30_000, 300_000]; // 1s, 5s, 30s, 5min
 
@@ -62,13 +61,27 @@ export class InstanceSession {
 
   // ── Getters públicos ────────────────────────────────────────────────────────
 
-  get status(): ConnectionStatus { return this._status; }
-  get phone(): string | null { return this._phone; }
-  get qrCode(): string | null { return this._qrCode; }
-  get qrRaw(): string | null { return this._qrRaw; }
-  get webhook(): WebhookConfig | null { return this._webhook; }
-  get isConnected(): boolean { return this._status === 'open' && this.socket !== null; }
-  get rateLimiterMetrics() { return this.rateLimiter.getMetrics(); }
+  get status(): ConnectionStatus {
+    return this._status;
+  }
+  get phone(): string | null {
+    return this._phone;
+  }
+  get qrCode(): string | null {
+    return this._qrCode;
+  }
+  get qrRaw(): string | null {
+    return this._qrRaw;
+  }
+  get webhook(): WebhookConfig | null {
+    return this._webhook;
+  }
+  get isConnected(): boolean {
+    return this._status === 'open' && this.socket !== null;
+  }
+  get rateLimiterMetrics() {
+    return this.rateLimiter.getMetrics();
+  }
 
   /** Retorna o estado completo da instância para a API REST */
   toState(): InstanceState {
@@ -191,10 +204,16 @@ export class InstanceSession {
 
     switch (options.type) {
       case 'image':
-        content = { image: { url: options.url }, ...(options.caption !== undefined && { caption: options.caption }) };
+        content = {
+          image: { url: options.url },
+          ...(options.caption !== undefined && { caption: options.caption }),
+        };
         break;
       case 'video':
-        content = { video: { url: options.url }, ...(options.caption !== undefined && { caption: options.caption }) };
+        content = {
+          video: { url: options.url },
+          ...(options.caption !== undefined && { caption: options.caption }),
+        };
         break;
       case 'document':
         content = {
@@ -246,7 +265,11 @@ export class InstanceSession {
   }
 
   /** Envia uma reação (emoji) a uma mensagem existente. */
-  async sendReaction(jid: string, messageId: string, emoji: string): Promise<WAMessage | undefined> {
+  async sendReaction(
+    jid: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<WAMessage | undefined> {
     this.assertConnected();
     const result = await this.socket!.sendMessage(jid, {
       react: { text: emoji, key: { id: messageId, remoteJid: jid } },
@@ -300,7 +323,10 @@ export class InstanceSession {
   /** Atualiza a configuração de webhook em tempo real sem reiniciar a instância. */
   setWebhook(config: WebhookConfig): void {
     this._webhook = config;
-    logger.info({ instance: this.name, url: config.url, enabled: config.enabled }, 'Webhook updated');
+    logger.info(
+      { instance: this.name, url: config.url, enabled: config.enabled },
+      'Webhook updated',
+    );
   }
 
   // ── SSE (Server-Sent Events) para Dashboard ──────────────────────────────────
@@ -337,7 +363,11 @@ export class InstanceSession {
   private broadcastSSE(data: Record<string, unknown>): void {
     const payload = JSON.stringify(data);
     this.sseClients.forEach((send) => {
-      try { send(payload); } catch { /* cliente desconectado */ }
+      try {
+        send(payload);
+      } catch {
+        /* cliente desconectado */
+      }
     });
   }
 
@@ -373,8 +403,8 @@ export class InstanceSession {
       }
 
       if (connection === 'close') {
-        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })
-          ?.output?.statusCode;
+        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output
+          ?.statusCode;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         this._status = 'close';
@@ -404,10 +434,13 @@ export class InstanceSession {
         if (!msg.message) continue;
         const msgType = Object.keys(msg.message)[0] ?? '';
         if (
-          ['protocolMessage', 'senderKeyDistributionMessage', 'keyTransparencyUpdateMessage'].includes(
-            msgType,
-          )
-        ) continue;
+          [
+            'protocolMessage',
+            'senderKeyDistributionMessage',
+            'keyTransparencyUpdateMessage',
+          ].includes(msgType)
+        )
+          continue;
         if (isJidBroadcast(msg.key.remoteJid ?? '')) continue;
 
         this.storeMessage(msg);

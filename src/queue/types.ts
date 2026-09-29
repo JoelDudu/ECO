@@ -26,6 +26,16 @@ export interface SendJob {
   payload: Record<string, unknown>;
 }
 
+/** Métricas de fila para monitoramento no Dashboard */
+export interface QueueMetrics {
+  driver: string;
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
 /** Contrato comum para todos os drivers de fila do ECO. */
 export interface QueueDriver {
   /** Enfileira um webhook para despacho com retentativas automáticas. */
@@ -36,6 +46,9 @@ export interface QueueDriver {
 
   /** Para todos os workers graciosamente. */
   stop(): Promise<void>;
+
+  /** Retorna métricas atuais da fila para o Dashboard. */
+  getMetrics(): Promise<QueueMetrics>;
 
   /** Nome do driver ativo. */
   readonly name: string;

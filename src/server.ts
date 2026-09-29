@@ -3,6 +3,7 @@ import express from 'express';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { SessionManager } from './core/session-manager';
+import { createDashboardServer } from './dashboard/server';
 import { authMiddleware } from './middleware/auth';
 import { startQueue, stopQueue } from './queue';
 import { instancesRouter } from './routes/instances';
@@ -60,39 +61,16 @@ async function bootstrap(): Promise<void> {
   });
 
   // Error handler global
-  api.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    logger.error({ error: err.message, stack: err.stack }, 'Unhandled API error');
-    res.status(500).json({ success: false, error: 'Internal server error' });
-  });
+  api.use(
+    (err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      logger.error({ error: err.message, stack: err.stack }, 'Unhandled API error');
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    },
+  );
 
   // ── Dashboard Server (EcoHub) — Sprint 4 ──────────────────────────────────
   if (env.DASHBOARD_ENABLED) {
-    const dashboard = express();
-    dashboard.use(express.json());
-
-    dashboard.get('/', (_req, res) => {
-      res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>EcoHub — ECO Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body style="font-family:monospace;background:#070d1a;color:#22c55e;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
-  <div style="text-align:center">
-    <h1 style="font-size:3rem;margin-bottom:8px">🔊 EcoHub</h1>
-    <p style="color:#94a3b8;font-size:1.1rem">Dashboard coming in Sprint 4</p>
-    <p style="color:#475569;font-size:.9rem;margin-top:24px">
-      API running at
-      <a href="http://localhost:${env.PORT}/health" style="color:#22c55e">
-        localhost:${env.PORT}
-      </a>
-    </p>
-  </div>
-</body>
-</html>`);
-    });
-
+    const dashboard = createDashboardServer();
     dashboard.listen(env.DASHBOARD_PORT, () => {
       logger.info({ port: env.DASHBOARD_PORT }, '📊 EcoHub Dashboard running');
     });

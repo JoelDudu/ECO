@@ -1,9 +1,9 @@
-import type { AuthenticationState, SignalDataTypeMap } from '@whiskeysockets/baileys';
-import { initAuthCreds, proto } from '@whiskeysockets/baileys';
-import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import type { AuthenticationState, SignalDataTypeMap } from '@whiskeysockets/baileys';
+import { initAuthCreds, proto } from '@whiskeysockets/baileys';
+import Database from 'better-sqlite3';
 import { env } from '../config/env';
 import { logger } from '../config/logger';
 
@@ -164,7 +164,9 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
       return Promise.resolve(result);
     },
 
-    set(data: { [T in keyof SignalDataTypeMap]?: { [id: string]: SignalDataTypeMap[T] | null } }): Promise<void> {
+    set(
+      data: { [T in keyof SignalDataTypeMap]?: { [id: string]: SignalDataTypeMap[T] | null } },
+    ): Promise<void> {
       // Transação atômica: todas as chaves salvas juntas ou nenhuma
       const transaction = db.transaction(() => {
         for (const [type, ids] of Object.entries(data)) {

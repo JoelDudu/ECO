@@ -9,14 +9,7 @@
     "type": "git",
     "url": "https://github.com/your-org/eco.git"
   },
-  "keywords": [
-    "whatsapp",
-    "baileys",
-    "gateway",
-    "webhook",
-    "typescript",
-    "multi-instance"
-  ],
+  "keywords": ["whatsapp", "baileys", "gateway", "webhook", "typescript", "multi-instance"],
   "type": "commonjs",
   "main": "dist/server.js",
   "scripts": {

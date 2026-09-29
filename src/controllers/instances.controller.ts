@@ -248,12 +248,13 @@ export function getQrPage(req: Request, res: Response): void {
   <div class="card">
     <div class="logo">🔊</div>
     <div class="instance">${name}</div>
-    ${status === 'open'
-      ? `<div class="phone">✅ Connected<br>${phone ?? ''}</div>`
-      : qr
-        ? `<div class="qr-wrap"><img src="${qr}" alt="WhatsApp QR Code"></div>
+    ${
+      status === 'open'
+        ? `<div class="phone">✅ Connected<br>${phone ?? ''}</div>`
+        : qr
+          ? `<div class="qr-wrap"><img src="${qr}" alt="WhatsApp QR Code"></div>
            <div class="hint">Open WhatsApp → Linked Devices → Link a Device<br>Scan the QR code above</div>`
-        : `<div class="hint">⏳ Generating QR Code...<br>This page refreshes automatically.</div>`
+          : `<div class="hint">⏳ Generating QR Code...<br>This page refreshes automatically.</div>`
     }
     <div class="status ${status}">${status}</div>
     <div class="hint" style="margin-top:24px">
@@ -284,7 +285,12 @@ export function getQrJson(req: Request, res: Response): void {
   }
 
   if (!session.qrCode) {
-    res.json({ success: true, status: session.status, qr: null, message: 'QR not yet available — retry in a few seconds' });
+    res.json({
+      success: true,
+      status: session.status,
+      qr: null,
+      message: 'QR not yet available — retry in a few seconds',
+    });
     return;
   }
 

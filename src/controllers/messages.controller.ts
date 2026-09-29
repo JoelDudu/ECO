@@ -37,7 +37,10 @@ function getSession(name: string, res: Response) {
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
-const PhoneSchema = z.string().min(8).transform((v) => v.replace(/\D/g, ''));
+const PhoneSchema = z
+  .string()
+  .min(8)
+  .transform((v) => v.replace(/\D/g, ''));
 
 const SendTextSchema = z.object({
   phone: PhoneSchema,

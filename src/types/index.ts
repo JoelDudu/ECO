@@ -1,4 +1,4 @@
-import type { proto, WASocket } from '@whiskeysockets/baileys';
+import type { WASocket, proto } from '@whiskeysockets/baileys';
 
 /**
  * Status possíveis de uma instância WhatsApp no ECO.

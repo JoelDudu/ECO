@@ -4,7 +4,7 @@ import { MemoryQueueDriver } from './drivers/memory.driver';
 import { RedisQueueDriver } from './drivers/redis.driver';
 import type { QueueDriver } from './types';
 
-export { type QueueDriver, type WebhookJob, type SendJob } from './types';
+export type { QueueDriver, WebhookJob, SendJob } from './types';
 
 let _driver: QueueDriver | null = null;
 

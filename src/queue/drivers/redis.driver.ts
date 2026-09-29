@@ -1,8 +1,9 @@
-import { Queue, Worker, type Job } from 'bullmq';
+import { type Job, Queue, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
-import type { QueueDriver, WebhookJob } from '../types';
+import { webhookLogger } from '../../dashboard/webhook-logger';
+import type { QueueDriver, QueueMetrics, WebhookJob } from '../types';
 
 const WEBHOOK_QUEUE = 'eco:webhooks';
 
@@ -55,7 +56,7 @@ export class RedisQueueDriver implements QueueDriver {
           delay: 5_000, // 5s → 10s → 20s → 40s → 80s
         },
         removeOnComplete: { count: 100 }, // Mantém os últimos 100 jobs completados
-        removeOnFail: { count: 500 },     // Mantém os últimos 500 falhos (DLQ auditável)
+        removeOnFail: { count: 500 }, // Mantém os últimos 500 falhos (DLQ auditável)
       },
     });
 
@@ -83,6 +84,16 @@ export class RedisQueueDriver implements QueueDriver {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
 
+        webhookLogger.addLog({
+          instance,
+          event,
+          url,
+          status: 'success',
+          statusCode: res.status,
+          attempt: (job.attemptsMade ?? 0) + 1,
+          payload,
+        });
+
         logger.debug(
           { instance, event, jobId: job.id, attempt: job.attemptsMade, status: res.status },
           'Webhook delivered',
@@ -98,13 +109,37 @@ export class RedisQueueDriver implements QueueDriver {
       if (!job) return;
       const isLastAttempt = (job.attemptsMade ?? 0) >= (job.opts.attempts ?? 5);
       if (isLastAttempt) {
+        webhookLogger.addLog({
+          instance: job.data.instance,
+          event: job.data.event,
+          url: job.data.url,
+          status: 'failed',
+          attempt: (job.attemptsMade ?? 0) + 1,
+          error: err.message,
+          payload: job.data.payload,
+        });
         logger.error(
           { instance: job.data.instance, event: job.data.event, jobId: job.id, error: err.message },
           '💀 Webhook in DLQ after all retries',
         );
       } else {
+        webhookLogger.addLog({
+          instance: job.data.instance,
+          event: job.data.event,
+          url: job.data.url,
+          status: 'retrying',
+          attempt: (job.attemptsMade ?? 0) + 1,
+          error: err.message,
+          payload: job.data.payload,
+        });
         logger.warn(
-          { instance: job.data.instance, event: job.data.event, jobId: job.id, attempt: job.attemptsMade, error: err.message },
+          {
+            instance: job.data.instance,
+            event: job.data.event,
+            jobId: job.id,
+            attempt: job.attemptsMade,
+            error: err.message,
+          },
           'Webhook failed — will retry',
         );
       }
@@ -128,6 +163,30 @@ export class RedisQueueDriver implements QueueDriver {
       // JobId único por evento evita duplicatas em caso de falha antes do ACK
       jobId: `${job.instance}:${job.event}:${job.payload.timestamp}`,
     });
+  }
+
+  /**
+   * Retorna métricas atuais da fila BullMQ para o Dashboard.
+   */
+  async getMetrics(): Promise<QueueMetrics> {
+    if (!this.webhookQueue) {
+      return { driver: 'redis', waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+    }
+    const counts = await this.webhookQueue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+    );
+    return {
+      driver: 'redis',
+      waiting: counts['waiting'] ?? 0,
+      active: counts['active'] ?? 0,
+      completed: counts['completed'] ?? 0,
+      failed: counts['failed'] ?? 0,
+      delayed: counts['delayed'] ?? 0,
+    };
   }
 
   /**

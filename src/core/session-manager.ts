@@ -56,7 +56,10 @@ export class SessionManager {
         await session.connect();
         logger.info({ instance: name }, 'Session restored and reconnecting...');
       } catch (err) {
-        logger.error({ instance: name, error: (err as Error).message }, 'Failed to restore session');
+        logger.error(
+          { instance: name, error: (err as Error).message },
+          'Failed to restore session',
+        );
       }
     });
 
