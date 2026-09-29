@@ -1202,11 +1202,7 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       loading.style.display = 'block';
       openModal('modal-qr');
 
-      // Se a instância estiver 'close', inicia conexão imediatamente
-      const inst = currentInstances.find(i => i.name === name);
-      if (!inst || inst.status === 'close') {
-        fetch(\`/api/instances/\${name}/connect\`, { method: 'POST' }).catch(() => {});
-      }
+      // Se a instância estiver 'close', /api/instances/:name/qr inicia conexão automaticamente
 
       await fetchQrForModal(name);
 
@@ -1215,7 +1211,7 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
         if (currentActiveQrInstance) {
           fetchQrForModal(currentActiveQrInstance);
         }
-      }, 2000);
+      }, 3000);
     }
 
     async function fetchQrForModal(name) {
@@ -1239,11 +1235,11 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
           img.style.display = 'block';
           loading.style.display = 'none';
           if (expired) expired.style.display = 'none';
-        } else if (data.status === 'close') {
+        } else if (data.status === 'close' && !img.src) {
           img.style.display = 'none';
           loading.style.display = 'none';
           if (expired) expired.style.display = 'block';
-        } else {
+        } else if (!data.qr && !img.src) {
           img.style.display = 'none';
           if (expired) expired.style.display = 'none';
           loading.style.display = 'block';

@@ -99,10 +99,19 @@ dashboardApiRouter.post('/instances', async (req: Request, res: Response) => {
   }
 });
 
-dashboardApiRouter.get('/instances/:name/qr', (req: Request, res: Response) => {
+dashboardApiRouter.get('/instances/:name/qr', async (req: Request, res: Response) => {
   const { name } = req.params as { name: string };
   const session = getSessionOr404(name, res);
   if (!session) return;
+
+  if (session.status === 'close') {
+    void session.connect();
+  }
+
+  for (let i = 0; i < 6; i++) {
+    if (session.qrCode || session.status === 'open') break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
 
   res.json({
     success: true,

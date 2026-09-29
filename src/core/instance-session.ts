@@ -106,6 +106,7 @@ export class InstanceSession {
   async connect(webhook?: WebhookConfig): Promise<void> {
     if (this._isDisconnecting) return;
     if (this._status === 'open' && this.socket) return;
+    if (this._status === 'connecting' && this.socket) return;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -114,12 +115,14 @@ export class InstanceSession {
     this._reconnectAttempt = 0;
 
     if (this.socket) {
+      const oldSocket = this.socket;
+      this.socket = null;
       try {
-        this.socket.end(undefined);
+        oldSocket.ev.removeAllListeners('connection.update');
+        oldSocket.end(undefined);
       } catch {
         // Silencia erro ao encerrar socket prévio
       }
-      this.socket = null;
     }
 
     if (webhook) this._webhook = webhook;
@@ -398,12 +401,15 @@ export class InstanceSession {
   /** Vincula todos os eventos do socket Baileys ao ciclo de vida da instância. */
   private bindEvents(): void {
     if (!this.socket) return;
+    const currentSocket = this.socket;
 
-    this.socket.ev.on('creds.update', async () => {
+    currentSocket.ev.on('creds.update', async () => {
       if (this.saveCreds) await this.saveCreds();
     });
 
-    this.socket.ev.on('connection.update', async (update) => {
+    currentSocket.ev.on('connection.update', async (update) => {
+      if (this.socket !== currentSocket) return;
+
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -454,7 +460,7 @@ export class InstanceSession {
               ] ?? 300_000;
             this._reconnectAttempt++;
           } else {
-            delay = 2_000;
+            delay = 5_000;
             this._reconnectAttempt++;
           }
 
