@@ -880,10 +880,19 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
             Abra o WhatsApp no celular &gt; Aparelhos conectados &gt; Conectar um aparelho
           </p>
           <img id="qr-image-src" class="qr-image" src="" alt="QR Code WhatsApp">
-          <div id="qr-loading" style="display: none; padding: 3rem 0;">
-            <p style="color: var(--primary);">Aguardando geração do QR Code...</p>
+          <div id="qr-loading" style="display: none; padding: 2.5rem 0;">
+            <p style="color: var(--primary); font-weight: 500; font-size: 1.1rem;">⏳ Gerando QR Code...</p>
+            <p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 0.4rem;">Conectando aos servidores do WhatsApp</p>
           </div>
-          <p id="qr-status-text" class="mono" style="font-size: 0.75rem; color: var(--text-muted);">Atualizando em tempo real via SSE</p>
+          <div id="qr-expired" style="display: none; padding: 2rem 0;">
+            <p style="color: var(--warning); font-weight: 600; font-size: 1.05rem;">⚠️ QR Code expirou</p>
+            <p style="color: var(--text-muted); font-size: 0.8rem; margin: 0.5rem 0 1rem;">O WhatsApp expira códigos não escaneados após ~30s.</p>
+            <button class="btn btn-primary btn-sm" onclick="refreshCurrentQr()">🔄 Gerar Novo QR Code</button>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 250px; margin-top: 0.75rem;">
+            <p id="qr-status-text" class="mono" style="font-size: 0.75rem; color: var(--text-muted);">Ao vivo via SSE + Polling</p>
+            <button class="btn btn-secondary btn-sm" style="font-size: 0.75rem;" onclick="refreshCurrentQr()">🔄 Renovar</button>
+          </div>
         </div>
       </div>
       <div class="modal-footer" style="justify-content: center;">
@@ -995,9 +1004,17 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
 
     // Modal Helpers
     function openModal(id) { document.getElementById(id)?.classList.add('show'); }
+    let qrPollInterval = null;
+
     function closeModal(id) {
       document.getElementById(id)?.classList.remove('show');
-      if (id === 'modal-qr') currentActiveQrInstance = null;
+      if (id === 'modal-qr') {
+        currentActiveQrInstance = null;
+        if (qrPollInterval) {
+          clearInterval(qrPollInterval);
+          qrPollInterval = null;
+        }
+      }
     }
 
     function openNewInstanceModal() {
@@ -1510,9 +1527,11 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
             } else if (curr?.qrCode) {
               const img = document.getElementById('qr-image-src');
               const loading = document.getElementById('qr-loading');
+              const expired = document.getElementById('qr-expired');
               img.src = curr.qrCode;
               img.style.display = 'block';
               loading.style.display = 'none';
+              expired.style.display = 'none';
             }
           }
         }

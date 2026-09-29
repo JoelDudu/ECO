@@ -43,6 +43,7 @@ export class InstanceSession {
   private _webhook: WebhookConfig | null = null;
   private _isDisconnecting = false;
   private _reconnectAttempt = 0;
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   /** Rate limiter anti-ban — 1 por instância para isolamento */
   private readonly rateLimiter: RateLimiter;
@@ -105,11 +106,41 @@ export class InstanceSession {
     if (this._isDisconnecting) return;
     if (this._status === 'open' && this.socket) return;
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this._reconnectAttempt = 0;
+
+    if (this.socket) {
+      try {
+        this.socket.end(undefined);
+      } catch {
+        // Silencia erro ao encerrar socket prévio
+      }
+      this.socket = null;
+    }
+
     if (webhook) this._webhook = webhook;
 
     const { state, saveCreds, clearAuth } = await useSQLiteAuthState(this.name);
     this.saveCreds = saveCreds;
     this.clearAuth = clearAuth;
+
+    // Se houver credenciais incompletas (ex: Pairing Code solicitado anteriormente mas não concluído),
+    // limpa o auth state para permitir que o Baileys gere QR Code sem entrar em loop de rejeição.
+    if (state.creds.me && !state.creds.registered) {
+      logger.info(
+        { instance: this.name },
+        'Clearing incomplete pairing credentials to generate fresh QR',
+      );
+      clearAuth();
+      const freshAuth = await useSQLiteAuthState(this.name);
+      state.creds = freshAuth.state.creds;
+      state.keys = freshAuth.state.keys;
+      this.saveCreds = freshAuth.saveCreds;
+      this.clearAuth = freshAuth.clearAuth;
+    }
 
     const { version } = await fetchLatestBaileysVersion();
     const silentLogger = pino({ level: 'silent' });
@@ -155,6 +186,13 @@ export class InstanceSession {
     this._isDisconnecting = true;
     this._status = 'close';
     this._reconnectAttempt = 0;
+    this._qrCode = null;
+    this._qrRaw = null;
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
     if (this.socket) {
       await this.socket.logout().catch(() => undefined);
@@ -408,18 +446,26 @@ export class InstanceSession {
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         this._status = 'close';
+        this._qrCode = null;
+        this._qrRaw = null;
         this.broadcastSSE({ event: 'connection.update', status: 'close', statusCode });
 
         if (shouldReconnect && !this._isDisconnecting) {
-          const delay =
-            RECONNECT_DELAYS_MS[Math.min(this._reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)] ??
-            300_000;
+          // Se já possui telefone (sessão ativa desconectou), usa escala exponencial normal.
+          // Se ainda está no pareamento (sem telefone), aguarda 2s e gera novo QR fresco.
+          const delay = this._phone
+            ? (RECONNECT_DELAYS_MS[
+                Math.min(this._reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)
+              ] ?? 300_000)
+            : 2_000;
+
           this._reconnectAttempt++;
           logger.warn(
             { instance: this.name, attempt: this._reconnectAttempt, delayMs: delay },
             `Connection closed. Reconnecting in ${delay / 1000}s...`,
           );
-          setTimeout(() => void this.connect(), delay);
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = setTimeout(() => void this.connect(), delay);
         } else if (statusCode === DisconnectReason.loggedOut) {
           logger.warn({ instance: this.name }, 'Logged out — session cleared');
           if (this.clearAuth) this.clearAuth();
