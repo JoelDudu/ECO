@@ -128,21 +128,6 @@ export class InstanceSession {
     this.saveCreds = saveCreds;
     this.clearAuth = clearAuth;
 
-    // Se houver credenciais incompletas (ex: Pairing Code solicitado anteriormente mas não concluído),
-    // limpa o auth state para permitir que o Baileys gere QR Code sem entrar em loop de rejeição.
-    if (state.creds.me && !state.creds.registered) {
-      logger.info(
-        { instance: this.name },
-        'Clearing incomplete pairing credentials to generate fresh QR',
-      );
-      clearAuth();
-      const freshAuth = await useSQLiteAuthState(this.name);
-      state.creds = freshAuth.state.creds;
-      state.keys = freshAuth.state.keys;
-      this.saveCreds = freshAuth.saveCreds;
-      this.clearAuth = freshAuth.clearAuth;
-    }
-
     const { version } = await fetchLatestBaileysVersion();
     const silentLogger = pino({ level: 'silent' });
 
@@ -452,17 +437,29 @@ export class InstanceSession {
         this.broadcastSSE({ event: 'connection.update', status: 'close', statusCode });
 
         if (shouldReconnect && !this._isDisconnecting) {
-          // Se já possui telefone (sessão ativa desconectou), usa escala exponencial normal.
-          // Se ainda está no pareamento (sem telefone), aguarda 2s e gera novo QR fresco.
-          const delay = this._phone
-            ? (RECONNECT_DELAYS_MS[
-                Math.min(this._reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)
-              ] ?? 300_000)
-            : 2_000;
+          let delay: number;
 
-          this._reconnectAttempt++;
+          if (statusCode === DisconnectReason.restartRequired) {
+            // Handshake pós-leitura de QR Code ou rotação de chaves — reconexão imediata
+            delay = 500;
+            this._reconnectAttempt = 0;
+            logger.info(
+              { instance: this.name },
+              'Restart required by WhatsApp — completing handshake immediately',
+            );
+          } else if (this._phone) {
+            delay =
+              RECONNECT_DELAYS_MS[
+                Math.min(this._reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)
+              ] ?? 300_000;
+            this._reconnectAttempt++;
+          } else {
+            delay = 2_000;
+            this._reconnectAttempt++;
+          }
+
           logger.warn(
-            { instance: this.name, attempt: this._reconnectAttempt, delayMs: delay },
+            { instance: this.name, attempt: this._reconnectAttempt, delayMs: delay, statusCode },
             `Connection closed. Reconnecting in ${delay / 1000}s...`,
           );
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);

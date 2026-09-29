@@ -1195,27 +1195,82 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       document.getElementById('qr-modal-title').textContent = \`Conectar: \${name}\`;
       const img = document.getElementById('qr-image-src');
       const loading = document.getElementById('qr-loading');
+      const expired = document.getElementById('qr-expired');
       
       img.style.display = 'none';
+      if (expired) expired.style.display = 'none';
       loading.style.display = 'block';
       openModal('modal-qr');
+
+      // Se a instância estiver 'close', inicia conexão imediatamente
+      const inst = currentInstances.find(i => i.name === name);
+      if (!inst || inst.status === 'close') {
+        fetch(\`/api/instances/\${name}/connect\`, { method: 'POST' }).catch(() => {});
+      }
+
+      await fetchQrForModal(name);
+
+      if (qrPollInterval) clearInterval(qrPollInterval);
+      qrPollInterval = setInterval(() => {
+        if (currentActiveQrInstance) {
+          fetchQrForModal(currentActiveQrInstance);
+        }
+      }, 2000);
+    }
+
+    async function fetchQrForModal(name) {
+      if (!currentActiveQrInstance || currentActiveQrInstance !== name) return;
+      const img = document.getElementById('qr-image-src');
+      const loading = document.getElementById('qr-loading');
+      const expired = document.getElementById('qr-expired');
 
       try {
         const res = await fetch(\`/api/instances/\${name}/qr\`);
         const data = await res.json();
+        if (data.status === 'open') {
+          closeModal('modal-qr');
+          showToast(\`Instância '\${name}' conectou com sucesso!\`, 'success');
+          loadInstances();
+          return;
+        }
+
         if (data.qr) {
           img.src = data.qr;
           img.style.display = 'block';
           loading.style.display = 'none';
-        } else if (data.status === 'open') {
-          closeModal('modal-qr');
-          showToast(\`Instância '\${name}' já está conectada!\`, 'success');
+          if (expired) expired.style.display = 'none';
+        } else if (data.status === 'close') {
+          img.style.display = 'none';
+          loading.style.display = 'none';
+          if (expired) expired.style.display = 'block';
+        } else {
+          img.style.display = 'none';
+          if (expired) expired.style.display = 'none';
+          loading.style.display = 'block';
         }
       } catch {
-        // Ignora erro
+        // Ignora erro momentâneo
       }
     }
 
+    async function refreshCurrentQr() {
+      if (!currentActiveQrInstance) return;
+      const img = document.getElementById('qr-image-src');
+      const loading = document.getElementById('qr-loading');
+      const expired = document.getElementById('qr-expired');
+
+      img.style.display = 'none';
+      if (expired) expired.style.display = 'none';
+      loading.style.display = 'block';
+      showToast('Solicitando novo QR Code...', 'info');
+
+      try {
+        await fetch(\`/api/instances/\${currentActiveQrInstance}/connect\`, { method: 'POST' });
+        setTimeout(() => fetchQrForModal(currentActiveQrInstance), 1000);
+      } catch {
+        showToast('Erro ao solicitar novo QR', 'error');
+      }
+    }
     // Pairing Code
     async function promptPairingCode(name) {
       const phone = prompt('Digite o número de telefone completo (com código do país e DDD, ex: 5511999999999):');
