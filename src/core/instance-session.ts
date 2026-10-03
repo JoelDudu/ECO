@@ -30,6 +30,61 @@ import type {
 
 const RECONNECT_DELAYS_MS = [1_000, 5_000, 30_000, 300_000]; // 1s, 5s, 30s, 5min
 
+/** Mapa de extensões de arquivo para MIME types usados no WhatsApp. */
+const MIME_MAP: Record<string, string> = {
+  // Documentos
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  json: 'application/json',
+  zip: 'application/zip',
+  rar: 'application/x-rar-compressed',
+  // Imagens
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  // Vídeo
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  avi: 'video/x-msvideo',
+  // Áudio
+  mp3: 'audio/mpeg',
+  ogg: 'audio/ogg',
+  wav: 'audio/wav',
+};
+
+/** Infere o MIME type a partir da extensão da URL. */
+function inferMimeType(url: string): string {
+  try {
+    const ext = new URL(url).pathname.split('.').pop()?.toLowerCase() ?? '';
+    return MIME_MAP[ext] ?? 'application/octet-stream';
+  } catch {
+    return 'application/octet-stream';
+  }
+}
+
+/** Infere o nome do arquivo a partir da URL e do MIME type. */
+function inferFileName(url: string, mime: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const name = pathname.split('/').pop()?.split('?')[0] ?? '';
+    if (name?.includes('.')) return decodeURIComponent(name);
+    // Sem extensão na URL: usa MIME para criar nome genérico
+    const ext = Object.entries(MIME_MAP).find(([, m]) => m === mime)?.[0] ?? 'bin';
+    return `arquivo.${ext}`;
+  } catch {
+    return 'arquivo';
+  }
+}
+
 /**
  * Gerencia o ciclo de vida completo de uma sessão WhatsApp isolada.
  * Cada instância possui seu próprio socket Baileys, banco SQLite e configuração de webhook.
@@ -242,6 +297,10 @@ export class InstanceSession {
   /**
    * Envia uma mídia (imagem, vídeo, documento, sticker) a partir de uma URL.
    * Cada tipo tem seu payload tipado corretamente pelo Baileys.
+   *
+   * IMPORTANTE: a URL deve ser um link direto para o arquivo de mídia.
+   * Links de plataformas de streaming (YouTube, Vimeo, etc.) NÃO são suportados
+   * para o tipo 'video' — envie-os como mensagem de texto para gerar link preview.
    */
   async sendMedia(
     jid: string,
@@ -254,6 +313,27 @@ export class InstanceSession {
     },
   ): Promise<WAMessage | undefined> {
     this.assertConnected();
+
+    // Bloqueia URLs de plataformas de streaming que não são arquivos diretos
+    const STREAMING_HOSTS = [
+      'youtube.com',
+      'youtu.be',
+      'vimeo.com',
+      'dailymotion.com',
+      'twitch.tv',
+    ];
+    const urlHost = (() => {
+      try {
+        return new URL(options.url).hostname.replace('www.', '');
+      } catch {
+        return '';
+      }
+    })();
+    if (options.type === 'video' && STREAMING_HOSTS.some((h) => urlHost.endsWith(h))) {
+      throw new Error(
+        `URLs de streaming (${urlHost}) não são suportadas como tipo 'video'. Envie o link como mensagem de texto para gerar o link preview automático do WhatsApp.`,
+      );
+    }
 
     // Monta o payload correto por tipo — necessário pelo sistema de tipos discriminados do Baileys
     let content: AnyMessageContent;
@@ -271,13 +351,18 @@ export class InstanceSession {
           ...(options.caption !== undefined && { caption: options.caption }),
         };
         break;
-      case 'document':
+      case 'document': {
+        // Infere mimetype e nome do arquivo a partir da extensão da URL quando não informados
+        const inferredMime = inferMimeType(options.url);
+        const inferredName = inferFileName(options.url, inferredMime);
         content = {
           document: { url: options.url },
-          fileName: options.filename ?? 'file',
-          mimetype: options.mimetype ?? 'application/octet-stream',
+          fileName: options.filename ?? inferredName,
+          mimetype: options.mimetype ?? inferredMime,
+          ...(options.caption !== undefined && { caption: options.caption }),
         };
         break;
+      }
       case 'sticker':
         content = { sticker: { url: options.url } };
         break;
