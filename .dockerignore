@@ -1,0 +1,14 @@
+node_modules
+dist
+sessions
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+.git
+.github
+*.log
+logs
+.vscode
+.idea
