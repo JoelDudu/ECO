@@ -1,4 +1,10 @@
-import type { AnyMessageContent, WAMessage, WAMessageKey } from '@whiskeysockets/baileys';
+import { NodeCache } from '@cacheable/node-cache';
+import type {
+  AnyMessageContent,
+  CacheStore,
+  WAMessage,
+  WAMessageKey,
+} from '@whiskeysockets/baileys';
 import {
   Browsers,
   DisconnectReason,
@@ -46,6 +52,13 @@ export class InstanceSession {
   private _reconnectAttempt = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
 
+  /**
+   * Cache de contadores de retry do Signal Protocol (E2EE).
+   * Previne loops infinitos de re-tentativa quando uma mensagem não pode ser
+   * descriptografada (Bad MAC). Persiste entre reconexões da mesma instância.
+   */
+  private readonly msgRetryCounterCache: CacheStore;
+
   /** Rate limiter anti-ban — 1 por instância para isolamento */
   private readonly rateLimiter: RateLimiter;
 
@@ -59,6 +72,20 @@ export class InstanceSession {
     this.name = name;
     this.createdAt = new Date();
     this.rateLimiter = new RateLimiter(name);
+    // NodeCache adaptado ao contrato CacheStore do Baileys (Signal Protocol E2EE)
+    const _nc = new NodeCache({ stdTTL: 60, useClones: false });
+    this.msgRetryCounterCache = {
+      get: <T>(key: string): T | undefined => _nc.get(key) as T | undefined,
+      set: <T>(key: string, value: T): void => {
+        _nc.set(key, value);
+      },
+      del: (key: string): void => {
+        _nc.del(key);
+      },
+      flushAll: (): void => {
+        _nc.flushAll();
+      },
+    };
   }
 
   // ── Getters públicos ────────────────────────────────────────────────────────
@@ -139,6 +166,8 @@ export class InstanceSession {
       logger: silentLogger,
       printQRInTerminal: false,
       syncFullHistory: false,
+      // Cache compartilhado entre reconexões — previne Bad MAC por retry infinito
+      msgRetryCounterCache: this.msgRetryCounterCache,
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
@@ -205,7 +234,7 @@ export class InstanceSession {
   async sendText(jid: string, text: string): Promise<WAMessage | undefined> {
     this.assertConnected();
     await this.rateLimiter.waitForSlot();
-    const result = await this.socket!.sendMessage(jid, { text });
+    const result = await this.socket?.sendMessage(jid, { text });
     if (result?.key.id) this.storeMessage(result);
     return result;
   }
@@ -255,7 +284,7 @@ export class InstanceSession {
     }
 
     await this.rateLimiter.waitForSlot();
-    const result = await this.socket!.sendMessage(jid, content);
+    const result = await this.socket?.sendMessage(jid, content);
     if (result?.key.id) this.storeMessage(result);
     return result;
   }
@@ -266,7 +295,7 @@ export class InstanceSession {
   async sendAudio(jid: string, url: string, ptt = true): Promise<WAMessage | undefined> {
     this.assertConnected();
     await this.rateLimiter.waitForSlot();
-    const result = await this.socket!.sendMessage(jid, {
+    const result = await this.socket?.sendMessage(jid, {
       audio: { url },
       mimetype: 'audio/mp4',
       ptt,
@@ -284,7 +313,7 @@ export class InstanceSession {
   ): Promise<WAMessage | undefined> {
     this.assertConnected();
     await this.rateLimiter.waitForSlot();
-    const result = await this.socket!.sendMessage(jid, {
+    const result = await this.socket?.sendMessage(jid, {
       location: { degreesLatitude: latitude, degreesLongitude: longitude, name: name ?? '' },
     });
     if (result?.key.id) this.storeMessage(result);
@@ -298,7 +327,7 @@ export class InstanceSession {
     emoji: string,
   ): Promise<WAMessage | undefined> {
     this.assertConnected();
-    const result = await this.socket!.sendMessage(jid, {
+    const result = await this.socket?.sendMessage(jid, {
       react: { text: emoji, key: { id: messageId, remoteJid: jid } },
     });
     return result;
@@ -307,7 +336,7 @@ export class InstanceSession {
   /** Marca mensagens como lidas. */
   async markAsRead(jid: string, messageIds: string[]): Promise<void> {
     this.assertConnected();
-    await this.socket!.readMessages(
+    await this.socket?.readMessages(
       messageIds.map((id) => ({ id, remoteJid: jid, fromMe: false })),
     );
   }
@@ -330,7 +359,7 @@ export class InstanceSession {
       const without9 = digits.length === 13 ? `55${ddd}${digits.slice(5)}` : digits;
 
       try {
-        const results = await this.socket!.onWhatsApp(
+        const results = await this.socket?.onWhatsApp(
           `${with9}@s.whatsapp.net`,
           `${without9}@s.whatsapp.net`,
         );
@@ -389,13 +418,13 @@ export class InstanceSession {
 
   private broadcastSSE(data: Record<string, unknown>): void {
     const payload = JSON.stringify(data);
-    this.sseClients.forEach((send) => {
+    for (const send of this.sseClients) {
       try {
         send(payload);
       } catch {
         /* cliente desconectado */
       }
-    });
+    }
   }
 
   /** Vincula todos os eventos do socket Baileys ao ciclo de vida da instância. */
@@ -429,6 +458,23 @@ export class InstanceSession {
         this._phone = this.socket?.user?.id?.split(':')[0] ?? null;
         this.broadcastSSE({ event: 'connection.update', status: 'open', phone: this._phone });
         logger.info({ instance: this.name, phone: this._phone }, '✅ WhatsApp connected');
+
+        // Sincroniza pre-keys Signal com o servidor do WhatsApp.
+        // Essencial após QR Code pairing — previne "Bad MAC" em mensagens recebidas.
+        if (typeof this.socket?.uploadPreKeysToServerIfRequired === 'function') {
+          this.socket
+            .uploadPreKeysToServerIfRequired()
+            .then(() =>
+              logger.info({ instance: this.name }, '🔑 Signal pre-keys synced with WhatsApp'),
+            )
+            .catch((err: Error) =>
+              logger.warn(
+                { instance: this.name, error: err.message },
+                'Failed to upload pre-keys (non-fatal)',
+              ),
+            );
+        }
+
         await this.dispatchWebhook('connection.open', { phone: this._phone });
       }
 
@@ -478,7 +524,7 @@ export class InstanceSession {
       }
     });
 
-    this.socket.ev.on('messages.upsert', async ({ messages, type }) => {
+    currentSocket.ev.on('messages.upsert', async ({ messages, type }) => {
       if (type !== 'notify') return;
       for (const msg of messages) {
         if (!msg.message) continue;
@@ -505,7 +551,7 @@ export class InstanceSession {
       }
     });
 
-    this.socket.ev.on('messages.update', async (updates) => {
+    currentSocket.ev.on('messages.update', async (updates) => {
       for (const update of updates) {
         if (update.update.status !== undefined) {
           await this.dispatchWebhook('message.status', {

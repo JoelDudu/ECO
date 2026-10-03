@@ -72,7 +72,7 @@ export class SessionManager {
   getOrCreate(name: string): InstanceSession {
     const cleanName = this.sanitizeName(name);
     if (this.sessions.has(cleanName)) {
-      return this.sessions.get(cleanName)!;
+      return this.sessions.get(cleanName) as InstanceSession;
     }
     const session = new InstanceSession(cleanName);
     this.sessions.set(cleanName, session);
@@ -104,7 +104,7 @@ export class SessionManager {
   async createAndConnect(options: CreateInstanceOptions): Promise<InstanceSession> {
     const cleanName = this.sanitizeName(options.name);
 
-    if (this.sessions.has(cleanName) && this.sessions.get(cleanName)!.isConnected) {
+    if (this.sessions.has(cleanName) && this.sessions.get(cleanName)?.isConnected) {
       throw new Error(`Instance '${cleanName}' is already connected`);
     }
 
@@ -136,9 +136,9 @@ export class SessionManager {
         if (fs.existsSync(dbPath)) {
           fs.unlinkSync(dbPath);
           // Remove arquivos WAL se existirem
-          [`${dbPath}-shm`, `${dbPath}-wal`].forEach((f) => {
+          for (const f of [`${dbPath}-shm`, `${dbPath}-wal`]) {
             if (fs.existsSync(f)) fs.unlinkSync(f);
-          });
+          }
           logger.info({ instance: cleanName }, 'Session database removed');
           return true;
         }

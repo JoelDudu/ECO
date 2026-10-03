@@ -30,7 +30,6 @@ export async function startQueue(): Promise<QueueDriver> {
     case 'redis':
       _driver = new RedisQueueDriver();
       break;
-    case 'memory':
     default:
       _driver = new MemoryQueueDriver();
       break;

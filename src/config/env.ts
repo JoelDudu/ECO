@@ -52,9 +52,9 @@ function validateEnv() {
 
   if (!result.success) {
     console.error('\n❌ Erro nas variáveis de ambiente do ECO:\n');
-    result.error.issues.forEach((issue) => {
+    for (const issue of result.error.issues) {
       console.error(`  • ${issue.path.join('.')}: ${issue.message}`);
-    });
+    }
     console.error('\n📄 Verifique o arquivo .env.example para referência.\n');
     process.exit(1);
   }

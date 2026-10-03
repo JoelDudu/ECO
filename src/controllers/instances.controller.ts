@@ -58,7 +58,7 @@ function validateBody<T>(schema: z.ZodSchema<T>, body: unknown, res: Response): 
  * GET /instances
  * Lista todas as instâncias ativas com seus estados.
  */
-export function listInstances(req: Request, res: Response): void {
+export function listInstances(_req: Request, res: Response): void {
   const instances = manager.listAll();
   res.json({
     success: true,
