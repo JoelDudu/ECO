@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Node.js-20+-68a063?style=flat-square&logo=node.js" alt="Node.js 20+" />
+  <img src="https://img.shields.io/badge/Node.js-20%20LTS-68a063?style=flat-square&logo=node.js" alt="Node.js 20 LTS" />
   <img src="https://img.shields.io/badge/TypeScript-5.5-3178c6?style=flat-square&logo=typescript" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Baileys-6.7-25d366?style=flat-square&logo=whatsapp" alt="Baileys" />
   <img src="https://img.shields.io/badge/Queue-BullMQ%20%2B%20Redis-dc382d?style=flat-square&logo=redis" alt="BullMQ & Redis" />
@@ -40,7 +40,7 @@ O ECO roda dois servidores Express independentes:
 ## 🚀 Como Executar Localmente
 
 ### Pré-requisitos
-- **Node.js 20+**
+- **Node.js 20 LTS** (ou 22 LTS — versões ímpares ou Node 24+ não possuem suporte nos módulos nativos C++)
 - **npm** ou **pnpm**
 
 ### Passo a Passo
