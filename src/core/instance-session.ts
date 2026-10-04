@@ -11,6 +11,7 @@ import {
   fetchLatestBaileysVersion,
   isJidBroadcast,
   isJidGroup,
+  isJidStatusBroadcast,
   makeCacheableSignalKeyStore,
   makeWASocket,
 } from '@whiskeysockets/baileys';
@@ -86,6 +87,40 @@ function inferFileName(url: string, mime: string): string {
 }
 
 /**
+ * Intercepta logs ruidosos do console gerados diretamente pela libsignal (Bad MAC temporário).
+ * Durante o ciclo de reconexão ou pareamento, mensagens enviadas com chave anterior
+ * falham no primeiro pacote, mas o Baileys gerencia o retry e renegociação de chaves em background.
+ */
+let isLibsignalSuppressed = false;
+function setupLibsignalFilter(): void {
+  if (isLibsignalSuppressed) return;
+  isLibsignalSuppressed = true;
+
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    const first =
+      typeof args[0] === 'string'
+        ? args[0]
+        : args[0] instanceof Error
+          ? args[0].message
+          : String(args[0] ?? '');
+
+    if (
+      first.includes('Failed to decrypt message with any known session') ||
+      first.includes('Session error:Error: Bad MAC') ||
+      first.includes('Bad MAC Error: Bad MAC')
+    ) {
+      logger.debug(
+        { context: 'libsignal' },
+        'Handshake do Signal Protocol com chave anterior; Baileys solicitará retry automaticamente.',
+      );
+      return;
+    }
+    originalConsoleError(...args);
+  };
+}
+
+/**
  * Gerencia o ciclo de vida completo de uma sessão WhatsApp isolada.
  * Cada instância possui seu próprio socket Baileys, banco SQLite e configuração de webhook.
  */
@@ -124,11 +159,13 @@ export class InstanceSession {
   private sseClients = new Set<(data: string) => void>();
 
   constructor(name: string) {
+    setupLibsignalFilter();
     this.name = name;
     this.createdAt = new Date();
     this.rateLimiter = new RateLimiter(name);
     // NodeCache adaptado ao contrato CacheStore do Baileys (Signal Protocol E2EE)
-    const _nc = new NodeCache({ stdTTL: 60, useClones: false });
+    // TTL de 1h (3600s) alinhado ao DEFAULT_CACHE_TTLS.MSG_RETRY do Baileys
+    const _nc = new NodeCache({ stdTTL: 3600, useClones: false });
     this.msgRetryCounterCache = {
       get: <T>(key: string): T | undefined => _nc.get(key) as T | undefined,
       set: <T>(key: string, value: T): void => {
@@ -221,6 +258,8 @@ export class InstanceSession {
       logger: silentLogger,
       printQRInTerminal: false,
       syncFullHistory: false,
+      shouldSyncHistoryMessage: () => false,
+      shouldIgnoreJid: (jid) => isJidStatusBroadcast(jid),
       // Cache compartilhado entre reconexões — previne Bad MAC por retry infinito
       msgRetryCounterCache: this.msgRetryCounterCache,
       auth: {
