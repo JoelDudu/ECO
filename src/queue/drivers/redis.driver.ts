@@ -5,7 +5,7 @@ import { logger } from '../../config/logger';
 import { webhookLogger } from '../../dashboard/webhook-logger';
 import type { QueueDriver, QueueMetrics, WebhookJob } from '../types';
 
-const WEBHOOK_QUEUE = 'eco:webhooks';
+const WEBHOOK_QUEUE = 'eco-webhooks';
 
 /**
  * Driver de fila Redis usando BullMQ.
