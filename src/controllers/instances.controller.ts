@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { logger } from '../config/logger';
 import { SessionManager } from '../core/session-manager';
+import type { WebhookEvent } from '../types';
 
 const manager = SessionManager.getInstance();
 
@@ -18,16 +19,35 @@ const CreateInstanceSchema = z.object({
       url: z.string().url('webhook.url must be a valid URL'),
       enabled: z.boolean().default(true),
       maxRetries: z.number().int().min(0).max(10).default(3),
+      events: z.array(z.string()).optional(),
+    })
+    .optional(),
+  settings: z
+    .object({
+      rejectCalls: z.boolean().optional(),
+      callRejectMessage: z.string().optional(),
+      ignoreGroups: z.boolean().optional(),
+      alwaysOnline: z.boolean().optional(),
+      autoRead: z.boolean().optional(),
     })
     .optional(),
   usePairingCode: z.boolean().default(false),
   phoneNumber: z.string().optional(),
 });
 
+const InstanceSettingsSchema = z.object({
+  rejectCalls: z.boolean().optional(),
+  callRejectMessage: z.string().optional(),
+  ignoreGroups: z.boolean().optional(),
+  alwaysOnline: z.boolean().optional(),
+  autoRead: z.boolean().optional(),
+});
+
 const WebhookSchema = z.object({
   url: z.string().url('url must be a valid URL'),
   enabled: z.boolean().default(true),
   maxRetries: z.number().int().min(0).max(10).default(3),
+  events: z.array(z.string()).optional(),
 });
 
 const PairingCodeSchema = z.object({
@@ -91,8 +111,10 @@ export async function createInstance(req: Request, res: Response): Promise<void>
           url: body.webhook.url,
           enabled: body.webhook.enabled ?? true,
           maxRetries: body.webhook.maxRetries ?? 3,
+          events: body.webhook.events as WebhookEvent[] | undefined,
         },
       }),
+      ...(body.settings !== undefined && { settings: body.settings }),
       usePairingCode: body.usePairingCode ?? false,
       ...(body.phoneNumber !== undefined && { phoneNumber: body.phoneNumber }),
     });
@@ -358,8 +380,45 @@ export function setWebhook(req: Request, res: Response): void {
     url: body.url,
     enabled: body.enabled ?? true,
     maxRetries: body.maxRetries ?? 3,
+    events: body.events as WebhookEvent[] | undefined,
   });
   res.json({ success: true, message: 'Webhook updated', webhook: body });
+}
+
+/**
+ * GET /instances/:name/settings
+ * Retorna as configurações de comportamento da instância.
+ */
+export function getInstanceSettings(req: Request, res: Response): void {
+  const { name } = req.params as { name: string };
+  const session = manager.get(name);
+
+  if (!session) {
+    res.status(404).json({ success: false, error: `Instance '${name}' not found` });
+    return;
+  }
+
+  res.json({ success: true, settings: session.settings });
+}
+
+/**
+ * PATCH /instances/:name/settings
+ * Atualiza as configurações de comportamento da instância em tempo real.
+ */
+export function updateInstanceSettings(req: Request, res: Response): void {
+  const { name } = req.params as { name: string };
+  const session = manager.get(name);
+
+  if (!session) {
+    res.status(404).json({ success: false, error: `Instance '${name}' not found` });
+    return;
+  }
+
+  const body = validateBody(InstanceSettingsSchema, req.body, res);
+  if (!body) return;
+
+  session.setSettings(body);
+  res.json({ success: true, message: 'Settings updated', settings: session.settings });
 }
 
 /**

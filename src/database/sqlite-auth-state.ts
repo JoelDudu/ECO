@@ -87,6 +87,12 @@ function openDatabase(instanceName: string): Database.Database {
       value TEXT NOT NULL,
       PRIMARY KEY (type, id)
     );
+
+    CREATE TABLE IF NOT EXISTS instance_metadata (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
 
   logger.debug({ instanceName, dbPath }, 'SQLite WAL database opened');
@@ -209,4 +215,36 @@ export async function useSQLiteAuthState(instanceName: string): Promise<{
   }
 
   return { state: { creds, keys }, saveCreds, clearAuth };
+}
+
+/**
+ * Salva metadados persistentes de uma instância (como configurações e webhooks).
+ */
+export function saveInstanceMetadata(instanceName: string, key: string, value: unknown): void {
+  const db = openDatabase(instanceName);
+  try {
+    db.prepare(
+      'INSERT OR REPLACE INTO instance_metadata (key, value, updated_at) VALUES (?, ?, unixepoch())',
+    ).run(key, JSON.stringify(value));
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Recupera metadados persistentes salvos no SQLite de uma instância.
+ */
+export function getInstanceMetadata<T>(instanceName: string, key: string): T | null {
+  const db = openDatabase(instanceName);
+  try {
+    const row = db
+      .prepare<[string], { value: string }>('SELECT value FROM instance_metadata WHERE key = ?')
+      .get(key);
+    if (!row) return null;
+    return JSON.parse(row.value) as T;
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
 }

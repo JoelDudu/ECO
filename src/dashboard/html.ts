@@ -584,6 +584,240 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       border: 1px dashed rgba(34, 197, 94, 0.4);
       margin: 1rem 0;
     }
+
+    /* Live Chat */
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      height: calc(100vh - 210px);
+      min-height: 600px;
+      max-height: 850px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }
+
+    .chat-sidebar {
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      background: rgba(10, 15, 29, 0.4);
+    }
+
+    .chat-sidebar-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .chat-search-bar {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .chat-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .chat-item {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      transition: background 0.15s ease;
+    }
+
+    .chat-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .chat-item.active {
+      background: rgba(34, 197, 94, 0.12);
+      border-left: 3px solid var(--primary);
+    }
+
+    .chat-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(34, 197, 94, 0.25) 100%);
+      border: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: var(--primary);
+      flex-shrink: 0;
+      font-size: 0.95rem;
+    }
+
+    .chat-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .chat-info-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 0.25rem;
+    }
+
+    .chat-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      margin-left: 0.5rem;
+    }
+
+    .chat-last-msg {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-main {
+      display: flex;
+      flex-direction: column;
+      background: rgba(7, 11, 20, 0.6);
+      position: relative;
+    }
+
+    .chat-empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .chat-empty-icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .chat-header {
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(10, 15, 29, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header-user {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.02) 0%, transparent 60%);
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .msg-bubble-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: 72%;
+    }
+
+    .msg-bubble-wrapper.outbound {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .msg-bubble-wrapper.inbound {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+
+    .msg-bubble {
+      padding: 0.65rem 0.95rem;
+      border-radius: 12px;
+      font-size: 0.875rem;
+      line-height: 1.45;
+      word-break: break-word;
+      position: relative;
+    }
+
+    .msg-bubble-wrapper.outbound .msg-bubble {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.22) 0%, rgba(16, 185, 129, 0.16) 100%);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      color: #f1f5f9;
+      border-bottom-right-radius: 2px;
+    }
+
+    .msg-bubble-wrapper.inbound .msg-bubble {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #f1f5f9;
+      border-bottom-left-radius: 2px;
+    }
+
+    .msg-meta {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      padding: 0 0.25rem;
+    }
+
+    .chat-input-bar {
+      padding: 0.85rem 1.25rem;
+      border-top: 1px solid var(--card-border);
+      background: rgba(10, 15, 29, 0.6);
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -614,6 +848,9 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
   <nav class="tabs-nav">
     <button class="tab-btn active" onclick="switchTab('instances')">
       📱 Instâncias <span class="tab-badge" id="badge-instances">0</span>
+    </button>
+    <button class="tab-btn" onclick="switchTab('chat')">
+      💬 Live Chat
     </button>
     <button class="tab-btn" onclick="switchTab('tester')">
       🚀 Envio de Teste
@@ -826,6 +1063,69 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
         </div>
       </div>
     </section>
+
+    <!-- TAB: LIVE CHAT -->
+    <section id="tab-chat" class="tab-content">
+      <div class="chat-layout">
+        <!-- Sidebar -->
+        <div class="chat-sidebar">
+          <div class="chat-sidebar-header">
+            <div>
+              <label style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.35rem; display: block; font-weight: 600;">Instância WhatsApp</label>
+              <select id="chat-instance-select" class="form-control" onchange="onChatInstanceChange()">
+                <option value="">Selecione uma instância...</option>
+              </select>
+            </div>
+            <div class="chat-search-bar">
+              <input type="text" id="chat-search" class="form-control" placeholder="Buscar conversa..." oninput="filterChatList()">
+              <button class="btn btn-primary btn-sm" onclick="openNewChatModal()" title="Nova Conversa">＋</button>
+            </div>
+          </div>
+          <div class="chat-list" id="chat-list-container">
+            <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+              Selecione uma instância para carregar as conversas.
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="chat-main" id="chat-main-area">
+          <div class="chat-empty-state" id="chat-empty-state">
+            <div class="chat-empty-icon">💬</div>
+            <h3 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--text);">Nenhuma conversa selecionada</h3>
+            <p style="font-size: 0.85rem; max-width: 400px; line-height: 1.5;">
+              Selecione um contato na lista à esquerda ou clique em <strong>＋</strong> para iniciar um novo chat com qualquer número.
+            </p>
+          </div>
+
+          <div id="chat-active-box" style="display: none; flex-direction: column; height: 100%;">
+            <div class="chat-header">
+              <div class="chat-header-user">
+                <div class="chat-avatar" id="chat-header-avatar">?</div>
+                <div>
+                  <div style="font-weight: 600; font-size: 0.95rem;" id="chat-header-name">-</div>
+                  <div class="mono" style="font-size: 0.75rem; color: var(--text-muted);" id="chat-header-jid">-</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary btn-sm" onclick="refreshCurrentChatMessages()" title="Atualizar mensagens">🔄</button>
+              </div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages-container">
+              <!-- Messages injected here via JS -->
+            </div>
+
+            <form class="chat-input-bar" onsubmit="handleSendChatMessage(event)">
+              <input type="text" id="chat-msg-input" class="form-control" placeholder="Digite uma mensagem..." autocomplete="off" required>
+              <button type="submit" class="btn btn-primary" id="btn-chat-send" style="padding: 0.5rem 1.25rem;">
+                ➤ Enviar
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- MODALS -->
@@ -943,10 +1243,98 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
               <span>Disparar webhooks para esta instância</span>
             </label>
           </div>
+          <div class="form-group" style="margin-top: 1rem; border-top: 1px solid var(--card-border); padding-top: 0.75rem;">
+            <label style="margin-bottom: 0.5rem; display: block; font-weight: 600; font-size: 0.85rem;">Eventos Ativos</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem;">
+                <input type="checkbox" id="webhook-evt-message-received" checked>
+                <span>📥 Mensagens Recebidas</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem;">
+                <input type="checkbox" id="webhook-evt-message-status" checked>
+                <span>📬 Status de Mensagens</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem;">
+                <input type="checkbox" id="webhook-evt-connection-update" checked>
+                <span>🔌 Conexão (Open/Close)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.4rem; cursor: pointer; font-size: 0.85rem;">
+                <input type="checkbox" id="webhook-evt-qrcode-updated">
+                <span>📷 QR Code Atualizado</span>
+              </label>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; display: block;">
+              Selecione quais eventos despachar para a URL acima.
+            </span>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeModal('modal-webhook-config')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Webhook</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Ajustes da Instância -->
+  <div id="modal-instance-settings" class="modal-backdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙️ Ajustes de Comportamento</h3>
+        <button class="modal-close" onclick="closeModal('modal-instance-settings')">&times;</button>
+      </div>
+      <form onsubmit="handleSaveSettings(event)">
+        <div class="modal-body">
+          <input type="hidden" id="settings-instance-name">
+          
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+              <input type="checkbox" id="settings-reject-calls" onchange="toggleRejectCallMsg(this.checked)">
+              <span>🚫 Rejeitar Chamadas Automaticamente</span>
+            </label>
+            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+              Recusa chamadas de voz e vídeo recebidas no WhatsApp instantaneamente.
+            </span>
+          </div>
+
+          <div class="form-group" id="group-reject-msg" style="display: none; margin-left: 1.5rem;">
+            <label style="font-size: 0.85rem;">Mensagem de Recusa (Opcional)</label>
+            <input type="text" id="settings-reject-msg" class="form-control" placeholder="ex: Este número não aceita chamadas, envie texto.">
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+              <input type="checkbox" id="settings-ignore-groups">
+              <span>👥 Ignorar Mensagens de Grupos</span>
+            </label>
+            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+              Não processa mensagens vindas de grupos, economizando banda e fila.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+              <input type="checkbox" id="settings-always-online">
+              <span>🟢 Sempre Online</span>
+            </label>
+            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+              Mantém a presença da instância como 'Disponível' no WhatsApp.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+              <input type="checkbox" id="settings-auto-read">
+              <span>👀 Marcar como Lido Automático (Auto-Read)</span>
+            </label>
+            <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
+              Envia confirmação de leitura (dois tiques azuis) assim que a mensagem chega.
+            </span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-instance-settings')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Ajustes</button>
         </div>
       </form>
     </div>
@@ -966,6 +1354,33 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
         <button type="button" class="btn btn-secondary" onclick="copyPayload()">Copiar JSON</button>
         <button type="button" class="btn btn-primary" onclick="closeModal('modal-payload')">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nova Conversa (Chat) -->
+  <div id="modal-new-chat" class="modal-backdrop">
+    <div class="modal-card" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3>Iniciar Nova Conversa</h3>
+        <button class="modal-close" onclick="closeModal('modal-new-chat')">&times;</button>
+      </div>
+      <form onsubmit="handleStartNewChat(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Número do WhatsApp (com DDI e DDD)</label>
+            <input type="text" id="new-chat-phone" class="form-control" placeholder="ex: 5511999999999" required>
+            <small style="color: var(--text-muted); font-size: 0.75rem;">Digite o número com código do país (DDI) e código de área (DDD), apenas dígitos.</small>
+          </div>
+          <div class="form-group">
+            <label>Nome do Contato (Opcional)</label>
+            <input type="text" id="new-chat-name" class="form-control" placeholder="ex: João Silva">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-new-chat')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Abrir Chat</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -997,6 +1412,7 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       if (content) content.classList.add('active');
 
       if (tabId === 'instances') loadInstances();
+      if (tabId === 'chat') initChatTab();
       if (tabId === 'webhooks') loadWebhookLogs();
       if (tabId === 'metrics') loadMetrics();
       if (tabId === 'tester') updateTesterInstances();
@@ -1119,6 +1535,17 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
                 <span class="instance-meta-label">Conectado em:</span>
                 <span class="instance-meta-value">\${inst.connectedAt ? new Date(inst.connectedAt).toLocaleTimeString() : '-'}</span>
               </div>
+              <div class="instance-meta-row">
+                <span class="instance-meta-label">Ajustes:</span>
+                <span class="instance-meta-value" style="font-size: 0.75rem;">
+                  \${[
+                    inst.settings?.rejectCalls ? '🚫 Anti-Chamada' : '',
+                    inst.settings?.ignoreGroups ? '👥 Ignora Grupos' : '',
+                    inst.settings?.alwaysOnline ? '🟢 Online' : '',
+                    inst.settings?.autoRead ? '👀 Auto-Read' : '',
+                  ].filter(Boolean).join(' • ') || '⚪ Padrão'}
+                </span>
+              </div>
             </div>
 
             <div class="instance-actions">
@@ -1136,7 +1563,8 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
                 <button class="btn btn-secondary btn-sm" onclick="disconnectInstance('\${inst.name}')">🔌 Desconectar</button>
               \` : ''}
 
-              <button class="btn btn-secondary btn-sm" onclick="openWebhookConfig('\${inst.name}', '\${inst.webhook?.url || ''}', \${Boolean(inst.webhook?.enabled)})">⚙️ Webhook</button>
+              <button class="btn btn-secondary btn-sm" onclick="openSettingsModal('\${inst.name}')">⚙️ Ajustes</button>
+              <button class="btn btn-secondary btn-sm" onclick="openWebhookConfig('\${inst.name}')">🪝 Webhook</button>
               <button class="btn btn-danger btn-sm" onclick="deleteInstance('\${inst.name}')">🗑️</button>
             </div>
           </div>
@@ -1332,10 +1760,23 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
     }
 
     // Webhook Config
-    function openWebhookConfig(name, url, enabled) {
+    function openWebhookConfig(name) {
+      const inst = currentInstances.find(i => i.name === name);
+      const url = inst?.webhook?.url || '';
+      const enabled = Boolean(inst?.webhook?.enabled);
+      const events = Array.isArray(inst?.webhook?.events) && inst.webhook.events.length > 0
+        ? inst.webhook.events
+        : ['message.received', 'message.status', 'connection.update'];
+
       document.getElementById('webhook-instance-name').value = name;
       document.getElementById('webhook-url-input').value = url;
       document.getElementById('webhook-enabled-input').checked = enabled;
+
+      document.getElementById('webhook-evt-message-received').checked = events.includes('message.received');
+      document.getElementById('webhook-evt-message-status').checked = events.includes('message.status');
+      document.getElementById('webhook-evt-connection-update').checked = events.includes('connection.update') || events.includes('connection.open');
+      document.getElementById('webhook-evt-qrcode-updated').checked = events.includes('qrcode.updated');
+
       openModal('modal-webhook-config');
     }
 
@@ -1345,11 +1786,17 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       const url = document.getElementById('webhook-url-input').value.trim();
       const enabled = document.getElementById('webhook-enabled-input').checked;
 
+      const events = [];
+      if (document.getElementById('webhook-evt-message-received').checked) events.push('message.received');
+      if (document.getElementById('webhook-evt-message-status').checked) events.push('message.status');
+      if (document.getElementById('webhook-evt-connection-update').checked) events.push('connection.update');
+      if (document.getElementById('webhook-evt-qrcode-updated').checked) events.push('qrcode.updated');
+
       try {
         const res = await fetch(\`/api/instances/\${name}/webhook\`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, enabled }),
+          body: JSON.stringify({ url, enabled, events }),
         });
         const data = await res.json();
         if (data.success) {
@@ -1359,6 +1806,58 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
         }
       } catch {
         showToast('Erro ao salvar webhook', 'error');
+      }
+    }
+
+    // Instance Settings
+    function toggleRejectCallMsg(checked) {
+      document.getElementById('group-reject-msg').style.display = checked ? 'block' : 'none';
+    }
+
+    function openSettingsModal(name) {
+      const inst = currentInstances.find(i => i.name === name);
+      const settings = inst?.settings || {};
+
+      document.getElementById('settings-instance-name').value = name;
+      document.getElementById('settings-reject-calls').checked = Boolean(settings.rejectCalls);
+      document.getElementById('settings-reject-msg').value = settings.callRejectMessage || '';
+      document.getElementById('settings-ignore-groups').checked = Boolean(settings.ignoreGroups);
+      document.getElementById('settings-always-online').checked = Boolean(settings.alwaysOnline);
+      document.getElementById('settings-auto-read').checked = Boolean(settings.autoRead);
+
+      toggleRejectCallMsg(Boolean(settings.rejectCalls));
+      openModal('modal-instance-settings');
+    }
+
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const name = document.getElementById('settings-instance-name').value;
+      const rejectCalls = document.getElementById('settings-reject-calls').checked;
+      const callRejectMessage = document.getElementById('settings-reject-msg').value.trim();
+      const ignoreGroups = document.getElementById('settings-ignore-groups').checked;
+      const alwaysOnline = document.getElementById('settings-always-online').checked;
+      const autoRead = document.getElementById('settings-auto-read').checked;
+
+      try {
+        const res = await fetch(\`/api/instances/\${name}/settings\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rejectCalls,
+            callRejectMessage: rejectCalls ? callRejectMessage : '',
+            ignoreGroups,
+            alwaysOnline,
+            autoRead,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Ajustes salvos com sucesso!', 'success');
+          closeModal('modal-instance-settings');
+          loadInstances();
+        }
+      } catch {
+        showToast('Erro ao salvar ajustes', 'error');
       }
     }
 
@@ -1550,6 +2049,291 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       return \`\${s}s\`;
     }
 
+    // ── Live Chat Logic ────────────────────────────────────────────────────────
+    let selectedChatInstance = null;
+    let selectedChatJid = null;
+    let selectedChatContactName = null;
+    let cachedChatList = [];
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function updateChatInstanceOptions() {
+      const select = document.getElementById('chat-instance-select');
+      if (!select) return;
+      const prevVal = select.value || selectedChatInstance;
+      const instances = currentInstances || [];
+
+      select.innerHTML = '<option value="">Selecione uma instância...</option>';
+      instances.forEach(inst => {
+        const opt = document.createElement('option');
+        opt.value = inst.name;
+        opt.textContent = \`\${inst.name} (\${inst.status === 'open' ? '🟢 Online' : '⚪ ' + inst.status})\`;
+        select.appendChild(opt);
+      });
+
+      if (prevVal && instances.some(i => i.name === prevVal)) {
+        select.value = prevVal;
+        selectedChatInstance = prevVal;
+      }
+    }
+
+    function initChatTab() {
+      const select = document.getElementById('chat-instance-select');
+      updateChatInstanceOptions();
+
+      const instances = currentInstances || [];
+      if (!selectedChatInstance && instances.length > 0) {
+        const firstOnline = instances.find(i => i.status === 'open') || instances[0];
+        select.value = firstOnline.name;
+        selectedChatInstance = firstOnline.name;
+      }
+
+      if (selectedChatInstance) {
+        loadChatsList();
+      }
+    }
+
+    function onChatInstanceChange() {
+      selectedChatInstance = document.getElementById('chat-instance-select').value;
+      selectedChatJid = null;
+      selectedChatContactName = null;
+      document.getElementById('chat-active-box').style.display = 'none';
+      document.getElementById('chat-empty-state').style.display = 'flex';
+      if (selectedChatInstance) {
+        loadChatsList();
+      } else {
+        document.getElementById('chat-list-container').innerHTML = 
+          '<div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">Selecione uma instância para carregar as conversas.</div>';
+      }
+    }
+
+    async function loadChatsList() {
+      if (!selectedChatInstance) return;
+      try {
+        const res = await fetch(\`/api/instances/\${encodeURIComponent(selectedChatInstance)}/chats\`);
+        const data = await res.json();
+        if (data.success) {
+          cachedChatList = data.chats || [];
+          renderChatList(cachedChatList);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar chats:', err);
+      }
+    }
+
+    function renderChatList(chats) {
+      const container = document.getElementById('chat-list-container');
+      if (!chats || chats.length === 0) {
+        container.innerHTML = \`
+          <div style="padding: 2.5rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+            Nenhuma conversa recente registrada.<br>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 0.75rem;" onclick="openNewChatModal()">＋ Iniciar Conversa</button>
+          </div>\`;
+        return;
+      }
+
+      let html = '';
+      chats.forEach(c => {
+        const isSelected = c.remoteJid === selectedChatJid;
+        const displayName = c.name || c.remoteJid.split('@')[0];
+        const initials = displayName.substring(0, 2).toUpperCase();
+        const timeStr = c.lastTimestamp ? new Date(c.lastTimestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        const lastMsg = escapeHtml(c.lastMessage || 'Conversa iniciada');
+
+        html += \`
+          <div class="chat-item \${isSelected ? 'active' : ''}" onclick="selectChat('\${escapeHtml(c.remoteJid)}', '\${escapeHtml(displayName)}')">
+            <div class="chat-avatar">\${escapeHtml(initials)}</div>
+            <div class="chat-info">
+              <div class="chat-info-top">
+                <span class="chat-name">\${escapeHtml(displayName)}</span>
+                <span class="chat-time">\${timeStr}</span>
+              </div>
+              <div class="chat-last-msg">\${lastMsg}</div>
+            </div>
+          </div>\`;
+      });
+      container.innerHTML = html;
+    }
+
+    function filterChatList() {
+      const q = (document.getElementById('chat-search').value || '').toLowerCase().trim();
+      if (!q) {
+        renderChatList(cachedChatList);
+        return;
+      }
+      const filtered = cachedChatList.filter(c => 
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        c.remoteJid.toLowerCase().includes(q) ||
+        (c.lastMessage && c.lastMessage.toLowerCase().includes(q))
+      );
+      renderChatList(filtered);
+    }
+
+    function openNewChatModal() {
+      document.getElementById('new-chat-phone').value = '';
+      document.getElementById('new-chat-name').value = '';
+      openModal('modal-new-chat');
+    }
+
+    function handleStartNewChat(e) {
+      e.preventDefault();
+      const phoneInput = document.getElementById('new-chat-phone').value.trim();
+      const contactName = document.getElementById('new-chat-name').value.trim();
+      const digits = phoneInput.replace(/\\D/g, '');
+      if (digits.length < 8) {
+        showToast('Número de WhatsApp inválido (mínimo 8 dígitos com DDD/DDI).', 'error');
+        return;
+      }
+      const jid = digits + '@s.whatsapp.net';
+      closeModal('modal-new-chat');
+
+      const existing = cachedChatList.find(c => c.remoteJid === jid);
+      if (!existing) {
+        cachedChatList.unshift({
+          remoteJid: jid,
+          name: contactName || digits,
+          lastMessage: 'Nova conversa iniciada',
+          lastTimestamp: Math.floor(Date.now() / 1000),
+          unreadCount: 0
+        });
+      }
+      selectChat(jid, contactName || digits);
+    }
+
+    async function selectChat(jid, name) {
+      selectedChatJid = jid;
+      selectedChatContactName = name || jid.split('@')[0];
+
+      renderChatList(cachedChatList);
+
+      document.getElementById('chat-empty-state').style.display = 'none';
+      const box = document.getElementById('chat-active-box');
+      box.style.display = 'flex';
+
+      document.getElementById('chat-header-name').textContent = selectedChatContactName;
+      document.getElementById('chat-header-jid').textContent = jid;
+      document.getElementById('chat-header-avatar').textContent = selectedChatContactName.substring(0, 2).toUpperCase();
+
+      await refreshCurrentChatMessages();
+      document.getElementById('chat-msg-input').focus();
+    }
+
+    async function refreshCurrentChatMessages() {
+      if (!selectedChatInstance || !selectedChatJid) return;
+      try {
+        const res = await fetch(\`/api/instances/\${encodeURIComponent(selectedChatInstance)}/chats/\${encodeURIComponent(selectedChatJid)}/messages\`);
+        const data = await res.json();
+        if (data.success) {
+          renderMessages(data.messages || []);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar mensagens:', err);
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('chat-messages-container');
+      if (!messages || messages.length === 0) {
+        container.innerHTML = \`
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.85rem;">
+            Nenhuma mensagem neste chat ainda. Envie a primeira mensagem abaixo!
+          </div>\`;
+        return;
+      }
+
+      let html = '';
+      messages.forEach(m => {
+        const isOut = Boolean(m.fromMe);
+        const timeStr = m.timestamp ? new Date(m.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        const sender = !isOut && m.senderName ? \`<div style="font-size: 0.75rem; font-weight: 600; color: var(--indigo); margin-bottom: 2px;">\${escapeHtml(m.senderName)}</div>\` : '';
+        const tick = isOut ? ' ✓✓' : '';
+
+        html += \`
+          <div class="msg-bubble-wrapper \${isOut ? 'outbound' : 'inbound'}">
+            <div class="msg-bubble">
+              \${sender}
+              \${escapeHtml(m.text)}
+            </div>
+            <div class="msg-meta">
+              <span>\${timeStr}</span>\${tick ? \`<span style="color: var(--primary);">\${tick}</span>\` : ''}
+            </div>
+          </div>\`;
+      });
+      container.innerHTML = html;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function handleSendChatMessage(e) {
+      e.preventDefault();
+      if (!selectedChatInstance || !selectedChatJid) return;
+      const input = document.getElementById('chat-msg-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const btn = document.getElementById('btn-chat-send');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(\`/api/instances/\${encodeURIComponent(selectedChatInstance)}/chats/\${encodeURIComponent(selectedChatJid)}/messages\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (data.success) {
+          input.value = '';
+          appendMessageBubble({
+            id: data.message?.id || String(Date.now()),
+            fromMe: true,
+            remoteJid: selectedChatJid,
+            text,
+            timestamp: Math.floor(Date.now() / 1000)
+          });
+          loadChatsList();
+        } else {
+          showToast('Erro ao enviar mensagem: ' + (data.error || 'Desconhecido'), 'error');
+        }
+      } catch (err) {
+        showToast('Falha na comunicação: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    }
+
+    function appendMessageBubble(msg) {
+      const container = document.getElementById('chat-messages-container');
+      const isOut = Boolean(msg.fromMe);
+      const timeStr = msg.timestamp ? new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      const tick = isOut ? ' ✓✓' : '';
+      const sender = !isOut && msg.senderName ? \`<div style="font-size: 0.75rem; font-weight: 600; color: var(--indigo); margin-bottom: 2px;">\${escapeHtml(msg.senderName)}</div>\` : '';
+
+      if (container.children.length === 1 && !container.children[0].classList.contains('msg-bubble-wrapper')) {
+        container.innerHTML = '';
+      }
+
+      const div = document.createElement('div');
+      div.className = \`msg-bubble-wrapper \${isOut ? 'outbound' : 'inbound'}\`;
+      div.innerHTML = \`
+        <div class="msg-bubble">
+          \${sender}
+          \${escapeHtml(msg.text)}
+        </div>
+        <div class="msg-meta">
+          <span>\${timeStr}</span>\${tick ? \`<span style="color: var(--primary);">\${tick}</span>\` : ''}
+        </div>\`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
     // Real-Time Server-Sent Events (SSE)
     function setupSSE() {
       const es = new EventSource('/api/events');
@@ -1562,12 +2346,33 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
         loadWebhookLogs();
       });
 
+      es.addEventListener('chat.message', (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          const msg = payload.message;
+          if (!msg) return;
+
+          // Se for da instância e chat ativo, renderiza a bolha em tempo real
+          if (payload.instance === selectedChatInstance && msg.remoteJid === selectedChatJid) {
+            appendMessageBubble(msg);
+          }
+
+          // Se for da instância atualmente selecionada, atualiza lista de conversas
+          if (payload.instance === selectedChatInstance) {
+            loadChatsList();
+          }
+        } catch (err) {
+          console.error('Erro ao processar SSE chat.message:', err);
+        }
+      });
+
       es.addEventListener('heartbeat', (e) => {
         const data = JSON.parse(e.data);
         document.getElementById('stat-uptime').textContent = formatUptime(data.uptime);
         if (data.instances) {
           currentInstances = data.instances;
           renderInstances(currentInstances);
+          updateChatInstanceOptions();
 
           // Se tiver modal de QR aberto para a instância e ela conectou ou tem novo QR
           if (currentActiveQrInstance) {

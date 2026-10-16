@@ -2,6 +2,7 @@ import { NodeCache } from '@cacheable/node-cache';
 import type {
   AnyMessageContent,
   CacheStore,
+  WACallEvent,
   WAMessage,
   WAMessageKey,
 } from '@whiskeysockets/baileys';
@@ -18,15 +19,23 @@ import {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { logger } from '../config/logger';
-import { useSQLiteAuthState } from '../database/sqlite-auth-state';
+import {
+  getInstanceMetadata,
+  saveInstanceMetadata,
+  useSQLiteAuthState,
+} from '../database/sqlite-auth-state';
 import { getQueue } from '../queue';
 import { RateLimiter } from '../queue/rate-limiter';
 import type {
   BaileysSocket,
+  ChatMessage,
+  ChatSummary,
   ConnectionStatus,
+  InstanceSettings,
   InstanceState,
   StoredMessage,
   WebhookConfig,
+  WebhookEvent,
 } from '../types';
 
 const RECONNECT_DELAYS_MS = [1_000, 5_000, 30_000, 300_000]; // 1s, 5s, 30s, 5min
@@ -121,6 +130,30 @@ function setupLibsignalFilter(): void {
 }
 
 /**
+ * Extrai o texto legível e o tipo de mídia de uma mensagem WAMessage.
+ */
+function extractMessageText(msg: WAMessage): { text: string; mediaType?: string } {
+  const m = msg.message;
+  if (!m) return { text: '' };
+
+  if (m.conversation) return { text: m.conversation };
+  if (m.extendedTextMessage?.text) return { text: m.extendedTextMessage.text };
+  if (m.imageMessage) return { text: m.imageMessage.caption || '📷 Foto', mediaType: 'image' };
+  if (m.videoMessage) return { text: m.videoMessage.caption || '🎥 Vídeo', mediaType: 'video' };
+  if (m.audioMessage) return { text: '🎵 Áudio', mediaType: 'audio' };
+  if (m.documentMessage)
+    return {
+      text: m.documentMessage.fileName || m.documentMessage.caption || '📄 Documento',
+      mediaType: 'document',
+    };
+  if (m.stickerMessage) return { text: '🏷️ Figurinha', mediaType: 'sticker' };
+  if (m.buttonsResponseMessage?.selectedDisplayText)
+    return { text: m.buttonsResponseMessage.selectedDisplayText };
+  if (m.listResponseMessage?.title) return { text: m.listResponseMessage.title };
+  return { text: '' };
+}
+
+/**
  * Gerencia o ciclo de vida completo de uma sessão WhatsApp isolada.
  * Cada instância possui seu próprio socket Baileys, banco SQLite e configuração de webhook.
  */
@@ -138,6 +171,12 @@ export class InstanceSession {
   private _qrRaw: string | null = null;
   private _connectedAt: Date | null = null;
   private _webhook: WebhookConfig | null = null;
+  private _settings: InstanceSettings = {
+    rejectCalls: false,
+    ignoreGroups: false,
+    alwaysOnline: false,
+    autoRead: false,
+  };
   private _isDisconnecting = false;
   private _reconnectAttempt = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
@@ -154,6 +193,9 @@ export class InstanceSession {
 
   /** Store em memória para lookup de mensagens (necessário para reações e replies) */
   private messageStore = new Map<string, StoredMessage>();
+
+  /** Mensagens recentes do chat (armazenadas em memória para o Live Chat do Dashboard) */
+  private chatMessages: ChatMessage[] = [];
 
   /** Listeners SSE para streaming de status em tempo real para o Dashboard */
   private sseClients = new Set<(data: string) => void>();
@@ -197,6 +239,9 @@ export class InstanceSession {
   get webhook(): WebhookConfig | null {
     return this._webhook;
   }
+  get settings(): InstanceSettings {
+    return this._settings;
+  }
   get isConnected(): boolean {
     return this._status === 'open' && this.socket !== null;
   }
@@ -211,6 +256,7 @@ export class InstanceSession {
       status: this._status,
       phone: this._phone,
       webhook: this._webhook,
+      settings: this._settings,
       createdAt: this.createdAt.toISOString(),
       connectedAt: this._connectedAt?.toISOString() ?? null,
     };
@@ -222,7 +268,7 @@ export class InstanceSession {
    * Inicia ou reconecta o socket Baileys para esta instância.
    * Ao reiniciar o servidor, restaura a sessão do SQLite sem pedir novo QR Code.
    */
-  async connect(webhook?: WebhookConfig): Promise<void> {
+  async connect(webhook?: WebhookConfig, settings?: InstanceSettings): Promise<void> {
     if (this._isDisconnecting) return;
     if (this._status === 'open' && this.socket) return;
     if (this._status === 'connecting' && this.socket) return;
@@ -244,7 +290,25 @@ export class InstanceSession {
       }
     }
 
-    if (webhook) this._webhook = webhook;
+    if (webhook) {
+      this._webhook = webhook;
+      saveInstanceMetadata(this.name, 'webhook', webhook);
+    } else if (!this._webhook) {
+      const savedWebhook = getInstanceMetadata<WebhookConfig>(this.name, 'webhook');
+      if (savedWebhook) {
+        this._webhook = savedWebhook;
+      }
+    }
+
+    if (settings) {
+      this._settings = { ...this._settings, ...settings };
+      saveInstanceMetadata(this.name, 'settings', this._settings);
+    } else {
+      const savedSettings = getInstanceMetadata<InstanceSettings>(this.name, 'settings');
+      if (savedSettings) {
+        this._settings = { ...this._settings, ...savedSettings };
+      }
+    }
 
     const { state, saveCreds, clearAuth } = await useSQLiteAuthState(this.name);
     this.saveCreds = saveCreds;
@@ -329,7 +393,20 @@ export class InstanceSession {
     this.assertConnected();
     await this.rateLimiter.waitForSlot();
     const result = await this.socket?.sendMessage(jid, { text });
-    if (result?.key.id) this.storeMessage(result);
+    if (result?.key.id) {
+      this.storeMessage(result);
+      const chatMsg: ChatMessage = {
+        id: result.key.id,
+        remoteJid: jid,
+        fromMe: true,
+        pushName: 'Eu',
+        text,
+        mediaType: null,
+        timestamp: Date.now(),
+      };
+      this.addChatMessage(chatMsg);
+      this.broadcastSSE({ event: 'chat.message', instance: this.name, message: chatMsg });
+    }
     return result;
   }
 
@@ -503,10 +580,25 @@ export class InstanceSession {
   /** Atualiza a configuração de webhook em tempo real sem reiniciar a instância. */
   setWebhook(config: WebhookConfig): void {
     this._webhook = config;
+    saveInstanceMetadata(this.name, 'webhook', config);
     logger.info(
-      { instance: this.name, url: config.url, enabled: config.enabled },
+      { instance: this.name, url: config.url, enabled: config.enabled, events: config.events },
       'Webhook updated',
     );
+  }
+
+  // ── Configurações de Comportamento ──────────────────────────────────────────
+
+  /** Atualiza as configurações de comportamento da instância em tempo real. */
+  setSettings(config: Partial<InstanceSettings>): void {
+    this._settings = { ...this._settings, ...config };
+    saveInstanceMetadata(this.name, 'settings', this._settings);
+
+    if (this._settings.alwaysOnline && this.isConnected) {
+      void this.socket?.sendPresenceUpdate('available').catch(() => undefined);
+    }
+
+    logger.info({ instance: this.name, settings: this._settings }, 'Instance settings updated');
   }
 
   // ── SSE (Server-Sent Events) para Dashboard ──────────────────────────────────
@@ -551,6 +643,53 @@ export class InstanceSession {
     }
   }
 
+  // ── Live Chat (Dashboard) ───────────────────────────────────────────────────
+
+  /** Adiciona uma mensagem ao histórico recente do chat */
+  addChatMessage(chatMsg: ChatMessage): void {
+    this.chatMessages.push(chatMsg);
+    if (this.chatMessages.length > 1000) {
+      this.chatMessages.shift();
+    }
+  }
+
+  /** Retorna a lista resumida de conversas recentes */
+  getRecentChats(): ChatSummary[] {
+    const map = new Map<string, { lastMsg: ChatMessage; name: string }>();
+
+    for (const msg of this.chatMessages) {
+      const jid = msg.remoteJid;
+      const existing = map.get(jid);
+      let name = existing?.name;
+      if (!name && msg.pushName && !msg.fromMe) name = msg.pushName;
+      if (!name) {
+        const phone = jid.split('@')[0] ?? jid;
+        name = phone.length > 8 ? `+${phone}` : jid;
+      }
+
+      map.set(jid, { lastMsg: msg, name });
+    }
+
+    const chats: ChatSummary[] = [];
+    for (const [jid, data] of map.entries()) {
+      chats.push({
+        jid,
+        name: data.name,
+        lastMessage: data.lastMsg.text,
+        timestamp: data.lastMsg.timestamp,
+      });
+    }
+
+    return chats.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  /** Retorna as mensagens de uma conversa específica */
+  getChatMessages(jid: string): ChatMessage[] {
+    return this.chatMessages
+      .filter((m) => m.remoteJid === jid)
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
   /** Vincula todos os eventos do socket Baileys ao ciclo de vida da instância. */
   private bindEvents(): void {
     if (!this.socket) return;
@@ -571,6 +710,7 @@ export class InstanceSession {
         this._status = 'connecting';
         this.broadcastSSE({ event: 'qr.update', qr: this._qrCode, instance: this.name });
         logger.info({ instance: this.name }, 'QR Code generated — waiting for scan');
+        await this.dispatchWebhook('qrcode.updated', { qr: this._qrCode, raw: qr });
       }
 
       if (connection === 'open') {
@@ -600,6 +740,10 @@ export class InstanceSession {
         }
 
         await this.dispatchWebhook('connection.open', { phone: this._phone });
+
+        if (this._settings.alwaysOnline) {
+          void this.socket?.sendPresenceUpdate('available').catch(() => undefined);
+        }
       }
 
       if (connection === 'close') {
@@ -663,8 +807,40 @@ export class InstanceSession {
           continue;
         if (isJidBroadcast(msg.key.remoteJid ?? '')) continue;
 
+        const remoteJid = msg.key.remoteJid ?? '';
+        const isGroup = isJidGroup(remoteJid);
+
+        // Ignora grupos se configurado
+        if (this._settings.ignoreGroups && isGroup) {
+          continue;
+        }
+
+        // Marca mensagem recebida como lida automaticamente se configurado
+        if (this._settings.autoRead && !msg.key.fromMe && msg.key.id) {
+          try {
+            await currentSocket.readMessages([msg.key]);
+          } catch {
+            // Silencia caso socket esteja ocupado
+          }
+        }
+
         this.storeMessage(msg);
-        const isGroup = isJidGroup(msg.key.remoteJid ?? '');
+
+        // Registra mensagem no Live Chat
+        const content = extractMessageText(msg);
+        const chatMsg: ChatMessage = {
+          id: msg.key.id || Math.random().toString(),
+          remoteJid,
+          fromMe: Boolean(msg.key.fromMe),
+          pushName: msg.pushName || null,
+          text: content.text,
+          mediaType: content.mediaType || null,
+          timestamp:
+            typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp * 1000 : Date.now(),
+        };
+        this.addChatMessage(chatMsg);
+        this.broadcastSSE({ event: 'chat.message', instance: this.name, message: chatMsg });
+
         await this.dispatchWebhook('message.received', {
           key: msg.key,
           message: msg.message,
@@ -672,6 +848,33 @@ export class InstanceSession {
           isGroup,
           timestamp: msg.messageTimestamp,
         });
+      }
+    });
+
+    currentSocket.ev.on('call', async (calls: WACallEvent[]) => {
+      if (this.socket !== currentSocket) return;
+
+      for (const call of calls) {
+        if (call.status === 'offer') {
+          await this.dispatchWebhook('call.received', call);
+
+          if (this._settings.rejectCalls) {
+            try {
+              await currentSocket.rejectCall(call.id, call.from);
+              logger.info({ instance: this.name, from: call.from }, 'Call rejected automatically');
+
+              if (this._settings.callRejectMessage) {
+                const target = call.from.includes('@') ? call.from : `${call.from}@s.whatsapp.net`;
+                await this.sendText(target, this._settings.callRejectMessage);
+              }
+            } catch (err) {
+              logger.warn(
+                { instance: this.name, from: call.from, error: (err as Error).message },
+                'Failed to reject call',
+              );
+            }
+          }
+        }
       }
     });
 
@@ -693,6 +896,14 @@ export class InstanceSession {
    */
   private async dispatchWebhook(event: string, data: unknown): Promise<void> {
     if (!this._webhook?.enabled || !this._webhook.url) return;
+
+    // Filtro de eventos ativos: se configurado, envia apenas os selecionados
+    if (this._webhook.events && this._webhook.events.length > 0) {
+      const isAllowed =
+        this._webhook.events.includes(event as WebhookEvent) ||
+        (event.startsWith('connection.') && this._webhook.events.includes('connection.update'));
+      if (!isAllowed) return;
+    }
 
     const payload = {
       event,

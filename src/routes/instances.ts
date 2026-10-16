@@ -5,12 +5,14 @@ import {
   deleteInstance,
   disconnectInstance,
   getInstance,
+  getInstanceSettings,
   getQrJson,
   getQrPage,
   listInstances,
   requestPairingCode,
   setWebhook,
   streamEvents,
+  updateInstanceSettings,
 } from '../controllers/instances.controller';
 import {
   markAsRead,
@@ -41,6 +43,11 @@ instancesRouter.post('/:name/pairing-code', requestPairingCode);
 
 // ── Webhook ───────────────────────────────────────────────────────────────────
 instancesRouter.post('/:name/webhook', setWebhook);
+
+// ── Configurações de Comportamento ────────────────────────────────────────────
+instancesRouter.get('/:name/settings', getInstanceSettings);
+instancesRouter.patch('/:name/settings', updateInstanceSettings);
+instancesRouter.post('/:name/settings', updateInstanceSettings);
 
 // ── SSE (Server-Sent Events) ──────────────────────────────────────────────────
 instancesRouter.get('/:name/events', streamEvents);

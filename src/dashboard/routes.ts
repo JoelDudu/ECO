@@ -4,7 +4,7 @@ import { logger } from '../config/logger';
 import { SessionManager } from '../core/session-manager';
 import { getQueue } from '../queue';
 import type { QueueMetrics } from '../queue/types';
-import type { CreateInstanceOptions } from '../types';
+import type { CreateInstanceOptions, WebhookEvent } from '../types';
 import { webhookLogger } from './webhook-logger';
 
 export const dashboardApiRouter = Router();
@@ -184,7 +184,7 @@ dashboardApiRouter.post('/instances/:name/webhook', (req: Request, res: Response
   const session = getSessionOr404(name, res);
   if (!session) return;
 
-  const { url, enabled } = req.body;
+  const { url, enabled, events } = req.body;
   if (!url || typeof url !== 'string') {
     res.status(400).json({ success: false, error: 'Webhook URL is required' });
     return;
@@ -193,10 +193,74 @@ dashboardApiRouter.post('/instances/:name/webhook', (req: Request, res: Response
   session.setWebhook({
     url,
     enabled: enabled !== false,
+    ...(Array.isArray(events) ? { events: events as WebhookEvent[] } : {}),
   });
 
   res.json({ success: true, webhook: session.webhook });
 });
+
+// ── Configurações de Comportamento da Instância ──────────────────────────────
+dashboardApiRouter.get('/instances/:name/settings', (req: Request, res: Response) => {
+  const { name } = req.params as { name: string };
+  const session = getSessionOr404(name, res);
+  if (!session) return;
+  res.json({ success: true, settings: session.settings });
+});
+
+dashboardApiRouter.post('/instances/:name/settings', (req: Request, res: Response) => {
+  const { name } = req.params as { name: string };
+  const session = getSessionOr404(name, res);
+  if (!session) return;
+
+  const { rejectCalls, callRejectMessage, ignoreGroups, alwaysOnline, autoRead } = req.body;
+  session.setSettings({
+    ...(typeof rejectCalls === 'boolean' ? { rejectCalls } : {}),
+    ...(typeof callRejectMessage === 'string' ? { callRejectMessage } : {}),
+    ...(typeof ignoreGroups === 'boolean' ? { ignoreGroups } : {}),
+    ...(typeof alwaysOnline === 'boolean' ? { alwaysOnline } : {}),
+    ...(typeof autoRead === 'boolean' ? { autoRead } : {}),
+  });
+
+  res.json({ success: true, settings: session.settings });
+});
+
+// ── Live Chat (Dashboard) ────────────────────────────────────────────────────
+dashboardApiRouter.get('/instances/:name/chats', (req: Request, res: Response) => {
+  const { name } = req.params as { name: string };
+  const session = getSessionOr404(name, res);
+  if (!session) return;
+  res.json({ success: true, chats: session.getRecentChats() });
+});
+
+dashboardApiRouter.get('/instances/:name/chats/:jid/messages', (req: Request, res: Response) => {
+  const { name, jid } = req.params as { name: string; jid: string };
+  const session = getSessionOr404(name, res);
+  if (!session) return;
+  res.json({ success: true, messages: session.getChatMessages(decodeURIComponent(jid)) });
+});
+
+dashboardApiRouter.post(
+  '/instances/:name/chats/:jid/messages',
+  async (req: Request, res: Response) => {
+    const { name, jid } = req.params as { name: string; jid: string };
+    const session = getSessionOr404(name, res);
+    if (!session) return;
+
+    const { text } = req.body;
+    if (!text || typeof text !== 'string') {
+      res.status(400).json({ success: false, error: 'Text message is required' });
+      return;
+    }
+
+    try {
+      const target = decodeURIComponent(jid);
+      const sent = await session.sendText(target, text);
+      res.json({ success: true, message: sent });
+    } catch (err) {
+      res.status(500).json({ success: false, error: (err as Error).message });
+    }
+  },
+);
 
 // ── Envio de Mensagens de Teste ──────────────────────────────────────────────
 dashboardApiRouter.post('/instances/:name/send/text', async (req: Request, res: Response) => {
@@ -355,6 +419,25 @@ dashboardApiRouter.get('/events', (req: Request, res: Response) => {
   };
   webhookLogger.on('log', onWebhookLog);
 
+  // Inscreve no stream de cada instância para repassar eventos de chat
+  const unsubscribers: Array<() => void> = [];
+  for (const inst of manager.listAll()) {
+    const session = manager.get(inst.name);
+    if (session) {
+      const unsub = session.addSSEClient((dataStr) => {
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.event === 'chat.message') {
+            sendEvent('chat.message', parsed);
+          }
+        } catch {
+          // Ignora erro de parse
+        }
+      });
+      unsubscribers.push(unsub);
+    }
+  }
+
   // Heartbeat a cada 3s com estado atualizado das instâncias
   const interval = setInterval(async () => {
     try {
@@ -380,5 +463,6 @@ dashboardApiRouter.get('/events', (req: Request, res: Response) => {
   req.on('close', () => {
     clearInterval(interval);
     webhookLogger.off('log', onWebhookLog);
+    for (const unsub of unsubscribers) unsub();
   });
 });

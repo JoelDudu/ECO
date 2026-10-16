@@ -109,7 +109,7 @@ export class SessionManager {
     }
 
     const session = this.getOrCreate(cleanName);
-    await session.connect(options.webhook);
+    await session.connect(options.webhook, options.settings);
 
     // Se solicitou Pairing Code, gera após connect()
     if (options.usePairingCode && options.phoneNumber) {
