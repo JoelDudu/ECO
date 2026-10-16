@@ -314,11 +314,21 @@ export class InstanceSession {
     this.saveCreds = saveCreds;
     this.clearAuth = clearAuth;
 
-    const { version } = await fetchLatestBaileysVersion();
+    let version: [number, number, number] | undefined;
+    try {
+      const v = await fetchLatestBaileysVersion();
+      version = v.version;
+    } catch (err) {
+      logger.warn(
+        { instance: this.name, error: (err as Error).message },
+        'Failed to fetch latest Baileys version from remote — using built-in default',
+      );
+    }
+
     const silentLogger = pino({ level: 'silent' });
 
     this.socket = makeWASocket({
-      version,
+      ...(version ? { version } : {}),
       logger: silentLogger,
       printQRInTerminal: false,
       syncFullHistory: false,
@@ -326,6 +336,9 @@ export class InstanceSession {
       shouldIgnoreJid: (jid) => isJidStatusBroadcast(jid),
       // Cache compartilhado entre reconexões — previne Bad MAC por retry infinito
       msgRetryCounterCache: this.msgRetryCounterCache,
+      keepAliveIntervalMs: 30_000,
+      connectTimeoutMs: 60_000,
+      defaultQueryTimeoutMs: 60_000,
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
@@ -338,7 +351,10 @@ export class InstanceSession {
     });
 
     this.bindEvents();
-    logger.info({ instance: this.name, version }, 'Connecting to WhatsApp...');
+    logger.info(
+      { instance: this.name, version: version ?? 'default' },
+      'Connecting to WhatsApp...',
+    );
   }
 
   /**
@@ -371,7 +387,9 @@ export class InstanceSession {
     }
 
     if (this.socket) {
-      await this.socket.logout().catch(() => undefined);
+      if (clearSession) {
+        await this.socket.logout().catch(() => undefined);
+      }
       this.socket.end(undefined);
       this.socket = null;
     }
@@ -749,7 +767,9 @@ export class InstanceSession {
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output
           ?.statusCode;
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const isReplaced = statusCode === DisconnectReason.connectionReplaced;
+        const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const shouldReconnect = !isLoggedOut && !isReplaced;
 
         this._status = 'close';
         this._qrCode = null;
@@ -784,10 +804,18 @@ export class InstanceSession {
           );
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
           this.reconnectTimer = setTimeout(() => void this.connect(), delay);
-        } else if (statusCode === DisconnectReason.loggedOut) {
+        } else if (isLoggedOut) {
           logger.warn({ instance: this.name }, 'Logged out — session cleared');
           if (this.clearAuth) this.clearAuth();
           await this.dispatchWebhook('connection.logout', {});
+        } else if (isReplaced) {
+          logger.warn(
+            { instance: this.name },
+            'Connection replaced: another session connected to this WhatsApp account. Pausing auto-reconnect to avoid session conflict and ban.',
+          );
+          await this.dispatchWebhook('connection.replaced', {
+            message: 'Another session connected to this WhatsApp account.',
+          });
         }
       }
     });
