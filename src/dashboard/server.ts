@@ -68,7 +68,15 @@ export function createDashboardServer(): express.Application {
     }
   });
 
-  // Interceptador para rotas da API do Dashboard
+  app.post('/auth/logout', (_req: Request, res: Response) => {
+    res.setHeader('Set-Cookie', 'eco_dashboard_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    res.json({ success: true });
+  });
+
+  app.get('/logout', (_req: Request, res: Response) => {
+    res.setHeader('Set-Cookie', 'eco_dashboard_token=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    res.redirect('/login');
+  });
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     if (!checkAuth(req)) {
       res.status(401).json({ success: false, error: 'Unauthorized. Dashboard secret required.' });

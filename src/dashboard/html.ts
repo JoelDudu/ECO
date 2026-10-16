@@ -1593,9 +1593,13 @@ export function getDashboardHtml(authRequired: boolean, apiPort: number): string
       };
     }
 
-    function logout() {
-      document.cookie = 'eco_dashboard_token=; Max-Age=0; path=/';
-      window.location.reload();
+    async function logout() {
+      try {
+        await fetch('/auth/logout', { method: 'POST' });
+      } catch {
+        // Fallback caso a requisição falhe
+      }
+      window.location.href = '/login';
     }
 
     // Init
